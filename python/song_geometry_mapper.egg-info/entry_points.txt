@@ -1,0 +1,2 @@
+[console_scripts]
+bgm-analyze = bgm.analyze:main

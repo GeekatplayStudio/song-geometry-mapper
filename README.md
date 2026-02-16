@@ -7,6 +7,18 @@ It includes:
 - A premium local web preview (fullscreen 3D map, trails, connections, labels, export)
 - A TouchDesigner build recipe for production-grade visuals
 
+Recent visual upgrades in web preview:
+- Borderless points with opacity control for cleaner depth layering
+- Activation pulse + short vibration response on active regions
+- Meteor-style trail shaping (brighter head, softer fading tail)
+- Visual-range enhancements: depth tint, adaptive label density fade, peak-only chromatic split, micro-dolly camera pulse
+- New built-in `Cinematic+` visual preset option
+- Save/load/delete custom presets for all control drawer settings (stored locally in browser)
+- Orbit/Pan drag mode and explicit pause control for playback navigation
+- Hz-aware color mapping (`spectral spread` or `peak frequency`) and custom palette JSON import
+- Dedicated glow intensity/threshold controls for tighter bloom behavior
+- Connection style blending (`Connection Solidness`) from particle trails to solid thin lines
+
 ## Quick Install (No Global Side Effects)
 
 ### Option A: Docker (Recommended)
@@ -70,6 +82,12 @@ Optional web app without Docker:
 ```bash
 cd ../web
 python3 -m http.server 5173
+```
+
+Web visual utility tests:
+
+```bash
+node --test web/tests/*.test.js
 ```
 
 ## Default Mapping

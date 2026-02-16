@@ -5,6 +5,7 @@
 1. Run tests before and after changes.
 2. Keep analyzer outputs deterministic for identical inputs/settings.
 3. Update docs when changing CLI args, output schema, or visual controls.
+4. For web visual/math helpers, add or update `node:test` coverage.
 
 ## Test Commands
 
@@ -20,6 +21,12 @@ Local `.venv`:
 cd python
 source .venv/bin/activate
 python -m pytest -q
+```
+
+Web visual utility tests:
+
+```bash
+node --test web/tests/*.test.js
 ```
 
 ## Analyzer CLI Reference

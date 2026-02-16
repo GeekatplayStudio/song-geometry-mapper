@@ -40,11 +40,9 @@
         </div>
       </aside>
 
-      <button id="drawer-toggle" class="drawer-toggle" type="button" aria-expanded="true" aria-label="Hide overlays" title="Hide overlays">▾</button>
-
       <section id="control-drawer" class="control-drawer" aria-label="Controls">
         <div class="drawer-grid">
-          <section class="control-block">
+          <section id="panel-session" class="control-block tab-panel is-active" data-tab-panel="session">
             <h2>Session</h2>
             <label class="file-pill" for="audio-file">
               <span>Load Audio</span>
@@ -56,6 +54,7 @@
 
             <div class="button-row">
               <button id="play-toggle" class="btn btn-primary" type="button" disabled>Play</button>
+              <button id="pause-audio" class="btn" type="button" disabled>Pause</button>
               <button id="reset-view" class="btn" type="button">Reset Camera</button>
             </div>
 
@@ -66,7 +65,7 @@
             </div>
           </section>
 
-          <section class="control-block">
+          <section id="panel-mapping" class="control-block tab-panel" data-tab-panel="mapping">
             <h2>Mapping</h2>
             <label>
               Mapping Mode
@@ -78,10 +77,18 @@
             <label>
               Camera Preset
               <select id="camera-preset">
+                <option value="static">Static</option>
                 <option value="drift" selected>Drift</option>
                 <option value="orbit">Orbit</option>
                 <option value="pulse">Pulse</option>
                 <option value="dive">Dive</option>
+              </select>
+            </label>
+            <label>
+              Drag Mode
+              <select id="drag-mode">
+                <option value="orbit" selected>Orbit</option>
+                <option value="pan">Pan</option>
               </select>
             </label>
             <label>
@@ -101,12 +108,16 @@
               <input id="knn-neighbors" type="range" min="1" max="10" value="4" step="1" />
             </label>
             <label>
+              Neighbor Boost
+              <input id="knn-boost" type="range" min="0.2" max="2" value="1" step="0.01" />
+            </label>
+            <label>
               3D Frequency Spread
               <input id="freq-spread" type="range" min="0.6" max="2.8" value="1.4" step="0.05" />
             </label>
           </section>
 
-          <section class="control-block">
+          <section id="panel-visual" class="control-block tab-panel" data-tab-panel="visual">
             <h2>Visual Dynamics</h2>
             <label>
               Point Scale
@@ -117,8 +128,24 @@
               <input id="point-opacity" type="range" min="0.15" max="1" value="0.72" step="0.01" />
             </label>
             <label>
+              Point Depth (3D)
+              <input id="point-depth" type="range" min="0" max="1.6" value="0.95" step="0.01" />
+            </label>
+            <label>
               Connection Strength
               <input id="edge-opacity" type="range" min="0" max="1" value="0.55" step="0.01" />
+            </label>
+            <label>
+              Connection Solidness
+              <input id="edge-solidness" type="range" min="0" max="1" value="0.45" step="0.01" />
+            </label>
+            <label>
+              Connection Trail Length
+              <input id="edge-trail-length" type="range" min="0.08" max="1" value="0.38" step="0.01" />
+            </label>
+            <label>
+              Connection Tail Fade
+              <input id="edge-tail-fade" type="range" min="0" max="1.8" value="0.9" step="0.01" />
             </label>
             <label>
               Trail Persistence
@@ -137,8 +164,16 @@
               <input id="pulse-strength" type="range" min="0" max="2.2" value="1.05" step="0.05" />
             </label>
             <label>
+              Node Hit Pulse
+              <input id="node-hit-pulse" type="range" min="0" max="2.8" value="1.25" step="0.05" />
+            </label>
+            <label>
               Motion Strength
               <input id="motion-strength" type="range" min="0" max="3" value="1.3" step="0.05" />
+            </label>
+            <label>
+              Motion Blur
+              <input id="motion-blur" type="range" min="0" max="1.4" value="0.28" step="0.01" />
             </label>
             <label>
               Auto Orbit
@@ -146,24 +181,70 @@
             </label>
           </section>
 
-          <section class="control-block">
+          <section id="panel-postfx" class="control-block tab-panel" data-tab-panel="postfx">
             <h2>Post FX &amp; Export</h2>
             <label>
               Visual Preset
               <select id="visual-preset">
                 <option value="cinematic" selected>Cinematic</option>
+                <option value="cinematic-plus">Cinematic+</option>
                 <option value="scientific">Scientific</option>
                 <option value="neon">Neon</option>
               </select>
             </label>
             <label>
+              Custom Presets
+              <select id="custom-preset-select">
+                <option value="">Select custom preset</option>
+              </select>
+            </label>
+            <label>
+              Save Preset As
+              <input id="custom-preset-name" type="text" maxlength="48" placeholder="My cinematic build" />
+            </label>
+            <div class="button-row">
+              <button id="save-custom-preset" class="btn" type="button">Save Preset</button>
+              <button id="delete-custom-preset" class="btn" type="button">Delete Preset</button>
+            </div>
+            <label>
               Bloom
               <input id="bloom-strength" type="range" min="0" max="1" value="0.56" step="0.01" />
+            </label>
+            <label>
+              Glow Intensity
+              <input id="glow-intensity" type="range" min="0" max="1.5" value="0.56" step="0.01" />
+            </label>
+            <label>
+              Glow Threshold
+              <input id="glow-threshold" type="range" min="0" max="1" value="0.2" step="0.01" />
+            </label>
+            <label>
+              Glow Shift (Infra)
+              <input id="glow-shift" type="range" min="0" max="1.6" value="0.55" step="0.01" />
+            </label>
+            <label>
+              Glow Decay
+              <input id="glow-decay" type="range" min="0.2" max="2.5" value="1.1" step="0.01" />
             </label>
             <label>
               Fog Depth
               <input id="fog-strength" type="range" min="0" max="1" value="0.42" step="0.01" />
             </label>
+            <label>
+              Color Metric
+              <select id="color-metric">
+                <option value="spread" selected>Spectral Spread (kHz)</option>
+                <option value="peak">Peak Frequency (kHz)</option>
+              </select>
+            </label>
+            <label class="file-pill" for="palette-file">
+              <span>Load Palette JSON</span>
+              <small>Format: [{"position":0.0,"color":[80,98,255]}, ...]</small>
+              <input id="palette-file" type="file" accept="application/json,.json" />
+            </label>
+            <div class="button-row">
+              <button id="clear-palette" class="btn" type="button">Use Built-in Palette</button>
+            </div>
             <label>
               Export Mode
               <select id="export-mode">
@@ -172,6 +253,7 @@
               </select>
             </label>
             <div class="button-row export-row">
+              <button id="export-analysis-json" class="btn" type="button">Export Analysis JSON</button>
               <button id="capture-still" class="btn" type="button">Capture Still</button>
               <button id="start-recording" class="btn" type="button">Start Video</button>
               <button id="stop-recording" class="btn" type="button" disabled>Stop Video</button>
@@ -179,6 +261,26 @@
           </section>
         </div>
       </section>
+
+      <nav class="tabs-dock" aria-label="Control tabs">
+        <button id="drawer-toggle" class="drawer-toggle" type="button" aria-expanded="true" aria-label="Hide controls" title="Hide controls">Hide</button>
+        <button class="tab-btn is-active" type="button" data-tab-target="session" aria-controls="panel-session" aria-label="Session controls" title="Session">
+          <span class="tab-short">S</span>
+          <span class="tab-full">Session</span>
+        </button>
+        <button class="tab-btn" type="button" data-tab-target="mapping" aria-controls="panel-mapping" aria-label="Mapping controls" title="Mapping">
+          <span class="tab-short">M</span>
+          <span class="tab-full">Mapping</span>
+        </button>
+        <button class="tab-btn" type="button" data-tab-target="visual" aria-controls="panel-visual" aria-label="Visual controls" title="Visual">
+          <span class="tab-short">V</span>
+          <span class="tab-full">Visual</span>
+        </button>
+        <button class="tab-btn" type="button" data-tab-target="postfx" aria-controls="panel-postfx" aria-label="Post FX controls" title="Post FX">
+          <span class="tab-short">FX</span>
+          <span class="tab-full">Post FX</span>
+        </button>
+      </nav>
     </main>
 
     <script type="module" src="./app.js"></script>
