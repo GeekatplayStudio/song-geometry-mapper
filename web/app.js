@@ -114,6 +114,7 @@ const state = {
   drawerOpen: true,
   stars: [],
   recording: null,
+  recordingAudioGraph: null,
 };
 
 function clamp(value, minValue, maxValue) {
@@ -1583,7 +1584,55 @@ function captureStill() {
   }, "image/png");
 }
 
-function startRecording() {
+async function getPlayerAudioTracksForRecording() {
+  // Prefer native media-element capture when available.
+  try {
+    if (typeof player.captureStream === "function") {
+      const stream = player.captureStream();
+      const tracks = stream.getAudioTracks();
+      if (tracks.length > 0) {
+        return tracks.map((track) => track.clone());
+      }
+    } else if (typeof player.mozCaptureStream === "function") {
+      const stream = player.mozCaptureStream();
+      const tracks = stream.getAudioTracks();
+      if (tracks.length > 0) {
+        return tracks.map((track) => track.clone());
+      }
+    }
+  } catch (error) {
+    console.warn("Native audio capture failed, using AudioContext fallback.", error);
+  }
+
+  if (typeof AudioContext === "undefined") {
+    return [];
+  }
+
+  try {
+    if (!state.recordingAudioGraph) {
+      const context = new AudioContext();
+      const source = context.createMediaElementSource(player);
+      const destination = context.createMediaStreamDestination();
+
+      source.connect(destination);
+      source.connect(context.destination);
+
+      state.recordingAudioGraph = { context, source, destination };
+    }
+
+    const { context, destination } = state.recordingAudioGraph;
+    if (context.state === "suspended") {
+      await context.resume();
+    }
+
+    return destination.stream.getAudioTracks().map((track) => track.clone());
+  } catch (error) {
+    console.warn("AudioContext recording graph unavailable.", error);
+    return [];
+  }
+}
+
+async function startRecording() {
   if (state.recording) {
     return;
   }
@@ -1593,12 +1642,26 @@ function startRecording() {
     return;
   }
 
-  const stream = canvas.captureStream(60);
+  const videoStream = canvas.captureStream(60);
+  const mixedStream = new MediaStream();
+  const videoTracks = videoStream.getVideoTracks();
+  for (const track of videoTracks) {
+    mixedStream.addTrack(track);
+  }
+
+  const audioTracks = await getPlayerAudioTracksForRecording();
+  for (const track of audioTracks) {
+    mixedStream.addTrack(track);
+  }
+  if (audioTracks.length === 0 && player.src) {
+    console.warn("Recording started without audio track. Ensure the song is loaded and browser allows capture.");
+  }
+
   const mimeCandidates = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
   const mimeType = mimeCandidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) || "video/webm";
 
   const chunks = [];
-  const recorder = new MediaRecorder(stream, { mimeType });
+  const recorder = new MediaRecorder(mixedStream, { mimeType });
 
   recorder.addEventListener("dataavailable", (event) => {
     if (event.data && event.data.size > 0) {
@@ -1610,6 +1673,14 @@ function startRecording() {
     const blob = new Blob(chunks, { type: mimeType });
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     downloadBlob(blob, `song-geometry-${stamp}.webm`);
+
+    for (const track of videoTracks) {
+      track.stop();
+    }
+    for (const track of audioTracks) {
+      track.stop();
+    }
+
     state.recording = null;
     startRecordingBtn.disabled = false;
     stopRecordingBtn.disabled = true;

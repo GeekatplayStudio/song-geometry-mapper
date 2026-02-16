@@ -12,7 +12,7 @@ Premium dark-mode frontend for local audio upload and full-song 3D spectral mapp
 - Temporal + kNN connections, plus flowing trail path over playback
 - Camera presets (`Drift`, `Orbit`, `Pulse`, `Dive`) with manual drag/zoom
 - Label toggle, connection toggle, bloom/fog controls
-- Export still PNG and record WebM preview video locally
+- Export still PNG and record WebM preview video locally (with song audio)
 
 ## Run (Docker)
 
