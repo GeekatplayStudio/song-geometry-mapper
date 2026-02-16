@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "song-geometry-mapper"
+version = "0.1.0"
+description = "Extract frame-wise spectral descriptors for Song Geometry Mapper visualizations."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "librosa>=0.10.1",
+  "numpy>=1.26.0",
+  "pandas>=2.1.0",
+  "scipy>=1.11.0"
+]
+
+[project.scripts]
+bgm-analyze = "bgm.analyze:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bgm*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,16 @@
+# Python
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+*.pyc
+
+# Local virtualenvs
+python/.venv/
+
+# Generated outputs
+out/
+assets/screenshots/*
+!assets/screenshots/.gitkeep
+
+# Editor/OS
+.DS_Store

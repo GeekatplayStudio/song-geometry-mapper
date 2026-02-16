@@ -1,0 +1,9 @@
+.git
+.gitignore
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.venv
+out
+assets/screenshots
+assets/example_audio

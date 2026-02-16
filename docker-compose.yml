@@ -1,0 +1,26 @@
+services:
+  analyzer:
+    image: song-geometry-mapper-analyzer:local
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+    working_dir: /workspace/python
+    volumes:
+      - ./:/workspace
+    entrypoint: ["python", "-m", "bgm.analyze"]
+
+  test:
+    image: song-geometry-mapper-analyzer:local
+    working_dir: /workspace/python
+    volumes:
+      - ./:/workspace
+    entrypoint: ["python", "-m", "pytest", "-q"]
+
+  web:
+    image: python:3.11-slim
+    working_dir: /workspace/web
+    volumes:
+      - ./:/workspace
+    command: ["python", "-m", "http.server", "5173", "--bind", "0.0.0.0"]
+    ports:
+      - "5173:5173"

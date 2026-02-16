@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Geekatplay Studio | Song Geometry Mapper</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="stage">
+      <canvas id="preview-canvas" width="1920" height="1080"></canvas>
+
+      <header class="hud-top">
+        <div class="title-stack">
+          <p class="eyebrow">Geekatplay Studio</p>
+          <h1 id="track-caption">Geometry of your song</h1>
+          <p class="subtitle">Full-song 3D spectral map with reactive trails, fluid connections, and cinematic depth.</p>
+        </div>
+        <div class="status-stack">
+          <span class="chip" id="session-state">Idle</span>
+          <div class="metrics" id="metrics">
+            <div><span>RMS</span><strong id="metric-rms">0.000</strong></div>
+            <div><span>Centroid</span><strong id="metric-centroid">0 Hz</strong></div>
+            <div><span>Spread</span><strong id="metric-spread">0.00 kHz</strong></div>
+          </div>
+        </div>
+      </header>
+
+      <aside class="legend" aria-hidden="true">
+        <span class="legend-title">Spectral Spread (kHz)</span>
+        <div class="legend-bar" id="legend-bar"></div>
+        <div class="legend-scale" id="legend-scale">
+          <span>2.20</span>
+          <span>1.90</span>
+          <span>1.60</span>
+          <span>1.30</span>
+          <span>1.00</span>
+          <span>0.70</span>
+          <span>0.40</span>
+        </div>
+      </aside>
+
+      <button id="drawer-toggle" class="drawer-toggle" type="button" aria-expanded="true" aria-label="Hide overlays" title="Hide overlays">▾</button>
+
+      <section id="control-drawer" class="control-drawer" aria-label="Controls">
+        <div class="drawer-grid">
+          <section class="control-block">
+            <h2>Session</h2>
+            <label class="file-pill" for="audio-file">
+              <span>Load Audio</span>
+              <small id="file-label">No file selected</small>
+              <input id="audio-file" type="file" accept="audio/*" />
+            </label>
+
+            <audio id="player" controls preload="metadata"></audio>
+
+            <div class="button-row">
+              <button id="play-toggle" class="btn btn-primary" type="button" disabled>Play</button>
+              <button id="reset-view" class="btn" type="button">Reset Camera</button>
+            </div>
+
+            <div class="switch-row">
+              <label><input id="show-connections" type="checkbox" checked /> Connections</label>
+              <label><input id="show-labels" type="checkbox" checked /> Labels</label>
+              <label><input id="cinema-mode" type="checkbox" checked /> Cinema FX</label>
+            </div>
+          </section>
+
+          <section class="control-block">
+            <h2>Mapping</h2>
+            <label>
+              Mapping Mode
+              <select id="mapping-mode">
+                <option value="manifold" selected>Manifold (PCA)</option>
+                <option value="time">Time Spine</option>
+              </select>
+            </label>
+            <label>
+              Camera Preset
+              <select id="camera-preset">
+                <option value="drift" selected>Drift</option>
+                <option value="orbit">Orbit</option>
+                <option value="pulse">Pulse</option>
+                <option value="dive">Dive</option>
+              </select>
+            </label>
+            <label>
+              Edge Mode
+              <select id="edge-mode">
+                <option value="both" selected>Temporal + kNN</option>
+                <option value="temporal">Temporal</option>
+                <option value="knn">kNN</option>
+              </select>
+            </label>
+            <label>
+              Display Decimation
+              <input id="display-decimation" type="range" min="1" max="8" value="2" step="1" />
+            </label>
+            <label>
+              Neighbor Links
+              <input id="knn-neighbors" type="range" min="1" max="10" value="4" step="1" />
+            </label>
+            <label>
+              3D Frequency Spread
+              <input id="freq-spread" type="range" min="0.6" max="2.8" value="1.4" step="0.05" />
+            </label>
+          </section>
+
+          <section class="control-block">
+            <h2>Visual Dynamics</h2>
+            <label>
+              Point Scale
+              <input id="point-scale" type="range" min="0.6" max="4.6" value="1.9" step="0.1" />
+            </label>
+            <label>
+              Connection Strength
+              <input id="edge-opacity" type="range" min="0" max="1" value="0.55" step="0.01" />
+            </label>
+            <label>
+              Trail Persistence
+              <input id="trail-persistence" type="range" min="0.75" max="0.99" value="0.93" step="0.01" />
+            </label>
+            <label>
+              Flow Density
+              <input id="flow-density" type="range" min="0" max="1" value="0.7" step="0.01" />
+            </label>
+            <label>
+              Motion Strength
+              <input id="motion-strength" type="range" min="0" max="3" value="1.3" step="0.05" />
+            </label>
+            <label>
+              Auto Orbit
+              <input id="rotation-speed" type="range" min="0" max="1.2" value="0.12" step="0.01" />
+            </label>
+          </section>
+
+          <section class="control-block">
+            <h2>Post FX &amp; Export</h2>
+            <label>
+              Visual Preset
+              <select id="visual-preset">
+                <option value="cinematic" selected>Cinematic</option>
+                <option value="scientific">Scientific</option>
+                <option value="neon">Neon</option>
+              </select>
+            </label>
+            <label>
+              Bloom
+              <input id="bloom-strength" type="range" min="0" max="1" value="0.56" step="0.01" />
+            </label>
+            <label>
+              Fog Depth
+              <input id="fog-strength" type="range" min="0" max="1" value="0.42" step="0.01" />
+            </label>
+            <label>
+              Export Mode
+              <select id="export-mode">
+                <option value="preview" selected>Preview Size</option>
+                <option value="4k">4K Still</option>
+              </select>
+            </label>
+            <div class="button-row export-row">
+              <button id="capture-still" class="btn" type="button">Capture Still</button>
+              <button id="start-recording" class="btn" type="button">Start Video</button>
+              <button id="stop-recording" class="btn" type="button" disabled>Stop Video</button>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
