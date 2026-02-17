@@ -21,7 +21,21 @@ Recent visual upgrades in web preview:
 - **New**: Toggle between `Wave` (organic) and `Straight` connection styles
 - **New**: Audio stem separation (isolating vocals, drums, bass, etc.) alongside full analysis
 
-## Quick Install (No Global Side Effects)
+## Quick Start (User-Friendly Scripts)
+
+### Windows
+
+1. Run `setup_windows.bat` (first time only).
+2. Run `analyze_song.bat` and drag your audio file into the window.
+3. Run `start_web.bat` to view the map.
+
+### Mac / Linux
+
+1. Run `./setup_mac.sh` (first time only).
+2. Run `./analyze_song.sh` and drag your audio into the terminal.
+3. Run `./start_web.sh` to view the map.
+
+## CLI Install (For Developers)
 
 ### Option A: Docker (Recommended)
 
