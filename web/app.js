@@ -2345,9 +2345,170 @@ function exportAnalysisJson() {
   setSessionLabel("Analysis Exported", !player.paused);
 }
 
+async function loadAnalysisJson(file) {
+  try {
+    setSessionLabel("Loading JSON...", true);
+    const text = await file.text();
+    let rawData;
+    try {
+      rawData = JSON.parse(text);
+    } catch (e) {
+      throw new Error("Invalid JSON file");
+    }
+
+    if (!Array.isArray(rawData)) {
+      throw new Error("JSON must be an array of frame objects");
+    }
+
+    // Map Python keys to internal keys
+    const descriptors = rawData.map((d) => {
+      // Handle both Python snake_case and potential JS camelCase if re-importing
+      const t = d.t !== undefined ? d.t : (d.t_seconds || 0);
+      const rms = d.rms || 0;
+      const centroidHz = d.spectral_centroid_hz || d.centroidHz || 0;
+      const spreadHz = d.spectral_spread_hz || d.spreadHz || 0;
+      const rolloffHz = d.spectral_rolloff_hz || d.rolloffHz || 0;
+      const flatness = d.spectral_flatness || d.flatness || 0;
+      const zcr = d.zcr || 0;
+      const peakHz = d.peak_hz || d.peakHz || 0;
+      const flux = d.flux || 0; // Python might not have flux currently, default to 0
+
+      return { t, rms, centroidHz, spreadHz, rolloffHz, flatness, zcr, peakHz, flux };
+    });
+
+    const ranges = computeRanges(descriptors);
+    const frames = [];
+
+    for (let i = 0; i < descriptors.length; i += 1) {
+      const d = descriptors[i];
+
+      const rmsN = normalizeValue(ranges.rms, d.rms);
+      const centroidN = normalizeValue(ranges.centroidHz, d.centroidHz);
+      const spreadN = normalizeValue(ranges.spreadHz, d.spreadHz);
+      const rolloffN = normalizeValue(ranges.rolloffHz, d.rolloffHz);
+      const flatnessN = normalizeValue(ranges.flatness, d.flatness);
+      const zcrN = normalizeValue(ranges.zcr, d.zcr);
+      const peakN = normalizeValue(ranges.peakHz, d.peakHz);
+      const fluxN = normalizeValue(ranges.flux, d.flux);
+
+      frames.push({
+        id: i,
+        t: d.t,
+        rms: d.rms,
+        rmsN,
+        centroidHz: d.centroidHz,
+        centroidN,
+        spreadHz: d.spreadHz,
+        spreadKhz: d.spreadHz / 1000,
+        spreadN,
+        rolloffHz: d.rolloffHz,
+        rolloffN,
+        flatness: d.flatness,
+        flatnessN,
+        zcr: d.zcr,
+        zcrN,
+        peakHz: d.peakHz,
+        peakN,
+        flux: d.flux,
+        fluxN,
+        featureVec: [centroidN, spreadN, rolloffN, flatnessN, zcrN, rmsN, peakN, fluxN],
+        x: 0,
+        y: 0,
+        z: 0,
+        size: 0.82 + Math.pow(rmsN, 0.68) * 4.8,
+        color: { r: 120, g: 170, b: 255 },
+        label: `${(d.peakHz / 1000).toFixed(2)}K`,
+      });
+    }
+
+    applyMapping(frames, mappingMode.value);
+
+    const spreadRangeKhz = {
+      min: ranges.spreadHz.min / 1000,
+      max: ranges.spreadHz.max / 1000,
+    };
+
+    const peakRangeKhz = {
+      min: ranges.peakHz.min / 1000,
+      max: ranges.peakHz.max / 1000,
+    };
+
+    const temporalEdges = buildTemporalEdges(frames);
+    const knnEdges = buildKnnEdges(frames, Number(knnNeighbors.value));
+    
+    // Estimate duration if audio not present
+    const lastFrame = frames[frames.length - 1];
+    const duration = lastFrame ? lastFrame.t + (frames.length > 1 ? frames[1].t - frames[0].t : 0.02) : 0;
+
+    const map = {
+      frames,
+      duration: state.map ? state.map.duration : duration, // Keep audio duration if available
+      spreadRangeKhz,
+      peakRangeKhz,
+      temporalEdges,
+      knnEdges,
+    };
+
+    const metricInfo = activeMetricInfo();
+    const range = metricInfo.rangeForMap(map);
+
+    for (const frame of frames) {
+      frame.color = colorFromMetric(metricInfo.valueForFrame(frame), range);
+    }
+
+    state.map = map;
+    
+    // Reset state
+    state.trail = [];
+    state.lastTrailIndex = -1;
+    state.activationPulse.clear();
+
+    trackCaption.textContent = "Analysis: " + file.name;
+    fileLabel.textContent = file.name;
+    setSessionLabel("Ready", false);
+
+  } catch (error) {
+    console.error(error);
+    setSessionLabel("JSON Error", false);
+    alert("Failed to load analysis JSON: " + error.message);
+  }
+}
+
 async function loadAndAnalyzeFile(file) {
   if (!file) {
     return;
+  }
+
+  const analysisMode = document.querySelector('input[name="analysis-mode"]:checked')?.value || "classic";
+
+  if (analysisMode === "voice") {
+    // In voice mode, we assume the user provides JSON for the map.
+    // Audio is only for playback.
+    try {
+      if (state.currentAudioUrl) {
+        URL.revokeObjectURL(state.currentAudioUrl);
+        state.currentAudioUrl = null;
+      }
+      const url = URL.createObjectURL(file);
+      state.currentAudioUrl = url;
+      player.src = url;
+      
+      // We still update the label but don't overwrite the map
+      if (!state.map) {
+         setSessionLabel("Waiting for JSON...", false);
+         // If they loaded audio first, remind them
+         alert("Audio loaded! Now drag the 'features.json' file to see the visualization.");
+      } else {
+         setSessionLabel("Ready", false);
+      }
+      
+      playToggle.disabled = false;
+      pauseAudioBtn.disabled = false;
+      return;
+    } catch (e) {
+      console.error("Audio load error:", e);
+      return;
+    }
   }
 
   try {
@@ -2652,7 +2813,34 @@ function bindEvents() {
 
   fileInput.addEventListener("change", (event) => {
     const [file] = event.target.files;
-    loadAndAnalyzeFile(file);
+    if (!file) {
+      return;
+    }
+    if (file.name.toLowerCase().endsWith(".json")) {
+      loadAnalysisJson(file);
+    } else {
+      loadAndAnalyzeFile(file);
+    }
+  });
+
+  // Enable drag and drop across the window
+  window.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  });
+
+  window.addEventListener("drop", (event) => {
+    event.preventDefault();
+    const files = event.dataTransfer.files;
+    if (files.length === 0) {
+      return;
+    }
+    const file = files[0];
+    if (file.name.toLowerCase().endsWith(".json")) {
+      loadAnalysisJson(file);
+    } else if (file.type.startsWith("audio/")) {
+      loadAndAnalyzeFile(file);
+    }
   });
 
   playToggle.addEventListener("click", handlePlaybackToggle);

@@ -1,6 +1,12 @@
 {
     "chat.tools.terminal.autoApprove": {
         "GC": true,
-        "Move-Item": true
+        "Move-Item": true,
+        "Out-File": true,
+        "git add": true,
+        "/^cd python; python -c \"import sys; print\\(sys\\.executable\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }
