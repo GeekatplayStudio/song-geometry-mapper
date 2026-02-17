@@ -29,8 +29,8 @@ Script behavior:
   - optional stem separation (`vocals`, `drums`, `bass`, `other`, `all`)
   - writes outputs to `out/`
 - `start_web.sh`
-  - runs Docker web service when available
-  - otherwise falls back to `python3 -m http.server 5173`
+  - runs Docker web + voice-api services when available
+  - otherwise starts local voice API and static web server
 
 ### Windows
 
@@ -47,7 +47,7 @@ From repo root:
 ```bash
 docker compose build analyzer
 docker compose run --rm test
-docker compose up web
+docker compose up web voice-api
 ```
 
 Web URL:
@@ -95,15 +95,15 @@ python3 -m http.server 5173
 
 ## Voice / Deep Workflow (Web)
 
-`Voice / Deep (Backend)` mode expects:
-- a precomputed `features.json`
-- an audio file for playback sync
+`Voice / Deep (Backend)` mode is now one-step:
+1. run `./start_web.sh` (or Docker `web + voice-api`)
+2. switch to `Voice / Deep (Backend)` in Session panel
+3. choose `Voice Focus`
+4. drag one audio file
+5. backend analyzer auto-generates JSON and loads map
 
-Typical pipeline:
-1. run Python analyzer (optionally with `--separate vocals`)
-2. in web UI, switch to `Voice / Deep (Backend)`
-3. drag `features.json`
-4. drag matching audio (`song.wav` or stem WAV)
+Optional manual path:
+- you can still drag analyzer-generated `features.json` directly.
 
 ## Output Files
 
@@ -141,7 +141,7 @@ Stem outputs (when `--separate` used):
 ### Empty or flat visualization
 
 - Verify `features.json` is non-empty and contains required columns.
-- In voice mode, load JSON and audio for synchronized playback behavior.
+- In voice mode, ensure voice API is running on `127.0.0.1:5180`.
 
 ### Performance is low
 
@@ -155,3 +155,4 @@ Stem outputs (when `--separate` used):
 - `docs/ALGORITHMS.md`
 - `python/README.md`
 - `web/README.md`
+- `LICENSE`

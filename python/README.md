@@ -128,7 +128,11 @@ Schema checks (`python/bgm/schema.py`):
 
 ## Integration With Web Voice Mode
 
-The web UI `Voice / Deep (Backend)` mode accepts this analyzer output directly:
+Primary flow:
+- Web `Voice / Deep (Backend)` uploads audio to local API (`bgm.web_api`).
+- API runs this analyzer pipeline and returns generated payload automatically.
+
+Manual fallback flow:
 1. load `features.json`
 2. load matching audio file
 
@@ -145,3 +149,4 @@ python -m pytest
 - project front page: `../README.md`
 - algorithm details: `../docs/ALGORITHMS.md`
 - research references: `../docs/RESEARCH.md`
+- license: `../LICENSE`

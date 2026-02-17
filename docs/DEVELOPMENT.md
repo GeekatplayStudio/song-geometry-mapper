@@ -28,6 +28,9 @@ Pipeline stages:
 6. optional edge export
 7. write csv/json/metadata
 
+Local API entrypoint:
+- `python -m bgm.web_api` exposes `/api/voice/analyze` for one-step web voice mode uploads.
+
 ### CLI Arguments to Keep Stable
 
 - frame analysis: `--sr`, `--n_fft`, `--hop`
@@ -42,11 +45,18 @@ If you change defaults or semantics, update:
 
 ## Browser Pipeline (Web)
 
-Main file: `web/app.js`
+Entrypoint:
+- `web/app.js` (composition + event wiring)
+
+Core modules:
+- `web/app/runtime.js` (DOM/runtime state + shared helpers)
+- `web/app/analysis-module.js` (analysis, mapping, palettes, presets)
+- `web/app/render-module.js` (camera, projection, draw pipeline)
+- `web/app/workflow-module.js` (voice upload flow, import/export, recording)
 
 Primary flows:
 - classic mode: audio decode + in-browser feature extraction
-- voice mode: JSON import + optional audio playback sync
+- voice mode: audio upload -> local API analysis -> payload import + playback sync
 
 Key functional areas:
 - descriptor extraction (`computeFrameDescriptor`)
@@ -87,6 +97,10 @@ node --test web/tests/*.test.js
 
 ```bash
 node --check web/app.js
+node --check web/app/runtime.js
+node --check web/app/analysis-module.js
+node --check web/app/render-module.js
+node --check web/app/workflow-module.js
 ```
 
 ## Release Checklist

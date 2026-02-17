@@ -24,3 +24,15 @@ services:
     command: ["python", "-m", "http.server", "5173", "--bind", "0.0.0.0"]
     ports:
       - "5173:5173"
+
+  voice-api:
+    image: song-geometry-mapper-analyzer:local
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+    working_dir: /workspace/python
+    volumes:
+      - ./:/workspace
+    command: ["python", "-m", "bgm.web_api", "--host", "0.0.0.0", "--port", "5180"]
+    ports:
+      - "5180:5180"

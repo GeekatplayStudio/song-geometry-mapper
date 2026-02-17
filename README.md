@@ -10,7 +10,7 @@ It turns a song into a time-indexed geometric structure:
 
 The project includes:
 - Python analyzer pipeline (`python/bgm`) for reproducible offline extraction
-- Browser analyzer and cinematic renderer (`web/app.js`) for interactive exploration
+- Browser analyzer and cinematic renderer (`web/app.js` + `web/app/*`) for interactive exploration
 - optional stem separation (Demucs) for voice/instrument focused maps
 - JSON/PNG/WebM/OBJ exports
 
@@ -34,9 +34,11 @@ The web app has two ingestion modes in `Session -> Analysis Model`:
 - Best for immediate preview and quick iteration.
 
 2. `Voice / Deep (Backend)`
-- Uses precomputed `features.json` (typically from Python analyzer).
-- Audio file is used for playback sync.
-- Supports stem-focused workflows (for example vocals-only geometry from Demucs outputs).
+- Upload one audio file.
+- Local voice backend API auto-runs Python analyzer and injects generated JSON map.
+- Audio is reused for playback sync automatically.
+- `Voice Focus` can request a stem target (for example vocals-only geometry).
+- Manual `features.json` loading is still supported as fallback.
 
 ## Architecture
 
@@ -53,15 +55,12 @@ Primary outputs:
 - `metadata.json`
 - optional `edges.csv`
 
-### Web Pipeline (`web/app.js`)
-- Parses audio/JSON, computes or imports descriptors
-- Builds geometry (`manifold` or `time` mapping)
-- Draws nodes, trails, labels, edge waves/lines, post FX
-- Supports exports:
-  - analysis JSON
-  - PNG still
-  - WebM recording
-  - visible 3D graph as OBJ
+### Web Pipeline (`web/`)
+- Entry/orchestration: `web/app.js`
+- Runtime + shared utilities: `web/app/runtime.js`
+- Analysis/mapping/presets: `web/app/analysis-module.js`
+- Rendering/camera/effects: `web/app/render-module.js`
+- Playback/import/export/recording workflows: `web/app/workflow-module.js`
 
 ## How Node Placement Works
 
@@ -122,8 +121,8 @@ Time Spine equations used in renderer:
 | `setup_windows.bat` | Windows | Prepare Docker or local Python environment |
 | `analyze_song.sh` | macOS/Linux | Guided audio analysis and optional stem selection |
 | `analyze_song.bat` | Windows | Guided audio analysis and optional stem selection |
-| `start_web.sh` | macOS/Linux | Start web preview (Docker when daemon is ready, else Python fallback) |
-| `start_web.bat` | Windows | Start web preview |
+| `start_web.sh` | macOS/Linux | Start web preview plus local voice analyzer API |
+| `start_web.bat` | Windows | Start web preview plus local voice analyzer API |
 | `startup.sh` / `startup.bat` | macOS/Linux, Windows | Docker-first startup convenience script |
 
 ### Typical user flow
@@ -205,13 +204,14 @@ out/
 
 In the web app:
 1. choose `Voice / Deep (Backend)`
-2. load/drag `features.json` from analyzer output
-3. load/drag corresponding audio file (full mix or matching stem audio)
+2. select `Voice Focus` (`vocals`, `drums`, `bass`, `other`, or full mix)
+3. load/drag one audio file
 4. press `Play` to drive active region synchronization
 
 Notes:
-- JSON can be raw frame arrays or exported analysis object with `frames`.
-- If JSON includes `x,y,z`, those positions are preserved.
+- Backend API endpoint is `http://127.0.0.1:5180/api/voice/analyze`.
+- If backend is unavailable, web app falls back to classic in-browser analysis.
+- Manual JSON import still accepts raw frame arrays or exported analysis objects with `frames`.
 
 ## Documentation Map
 
@@ -249,4 +249,5 @@ song-geometry-mapper/
 
 ## License
 
-Add a license before public distribution (for example MIT or Apache-2.0).
+This project is licensed under the MIT License.
+See `LICENSE`.

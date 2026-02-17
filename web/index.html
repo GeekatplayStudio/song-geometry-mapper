@@ -58,7 +58,7 @@
             <p>
               <strong>Classic (Browser):</strong> drop audio and analyze locally in the browser.
               <br />
-              <strong>Voice / Deep (Backend):</strong> load precomputed <code>features.json</code> (for example from stem analysis) and load matching audio for playback sync.
+              <strong>Voice / Deep (Backend):</strong> drop one audio file, backend analyzer auto-generates geometry JSON, and loads it for playback sync.
             </p>
             <h3>Controls</h3>
             <ul>
@@ -105,6 +105,18 @@
                        <span>Voice / Deep (Backend)</span>
                    </label>
                </div>
+               <div id="voice-options" style="display: none; margin-top: 8px;">
+                   <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem;">
+                       <span>Voice Focus:</span>
+                       <select id="voice-stem">
+                           <option value="vocals" selected>Vocals</option>
+                           <option value="none">Full Mix</option>
+                           <option value="drums">Drums</option>
+                           <option value="bass">Bass</option>
+                           <option value="other">Other</option>
+                       </select>
+                   </label>
+               </div>
             </div>
 
             <label class="file-pill" for="audio-file" style="flex-direction: column; align-items: flex-start; min-height: 80px; justify-content: center;">
@@ -121,13 +133,16 @@
                     const mode = document.querySelector('input[name="analysis-mode"]:checked').value;
                     const title = document.getElementById('upload-title');
                     const desc = document.getElementById('upload-desc');
+                    const voiceOptions = document.getElementById('voice-options');
                     
                     if (mode === 'classic') {
                         title.textContent = "Load Audio File";
                         desc.textContent = "Drag & drop .mp3 or .wav for instant browser analysis";
+                        if (voiceOptions) voiceOptions.style.display = "none";
                     } else {
-                        title.textContent = "Load Analysis Data";
-                        desc.innerHTML = "1. Drag <b>features.json</b> (Geometric Data)<br>2. Drag <b>separated.wav</b> (Audio)";
+                        title.textContent = "Load Audio For Voice Analyzer";
+                        desc.innerHTML = "Drag one audio file. Backend analyzer auto-builds geometry JSON and loads it.";
+                        if (voiceOptions) voiceOptions.style.display = "block";
                     }
                 }
             </script>

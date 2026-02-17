@@ -1,0 +1,1112 @@
+import {
+  buildLocalDensityMap,
+  computeAberrationStrength,
+  computeAtmosphereMix,
+  computeLabelDensityScale,
+  computeMicroDolly,
+} from "../visual_utils.js";
+
+export function createRenderModule(runtime) {
+  const {
+    ctx,
+    state,
+    player,
+    nodesOnly,
+    visualPreset,
+    motionBlur,
+    trailFlare,
+    trailPersistence,
+    edgeTailFade,
+    flowDensity,
+    motionStrength,
+    rotationSpeed,
+    cameraPreset,
+    freqSpread,
+    offsetX,
+    offsetY,
+    offsetZ,
+    pointScale,
+    pointOpacity,
+    pointDepth,
+    pulseStrength,
+    nodeHitPulse,
+    edgeMode,
+    edgeStyle,
+    edgeOpacity,
+    edgeSolidness,
+    edgeTrailLength,
+    knnBoost,
+    cinemaMode,
+    glowShift,
+    showConnections,
+    showLabels,
+    displayDecimation,
+    bloomStrength,
+    glowIntensity,
+    glowThreshold,
+    glowDecay,
+    fogStrength,
+    metricRms,
+    metricCentroid,
+    metricSpread,
+    PRESET_BACKGROUND,
+    clamp,
+    lerp,
+    rgba,
+    shiftToInfra,
+    mixColor,
+    getFrameIndexAtTime,
+    getInterpolatedFrameAtTime,
+    activityForIndex,
+    edgeFrequencyFactor,
+    sampleFrameAt,
+  } = runtime;
+
+  function updateTrail(dtMs) {
+    if (!state.map || state.map.frames.length === 0) {
+      return;
+    }
+  
+    const pulseDecay = dtMs * 0.001 * 2.6;
+    for (const [idx, value] of state.activationPulse.entries()) {
+      const next = value - pulseDecay;
+      if (next <= 0.03) {
+        state.activationPulse.delete(idx);
+      } else {
+        state.activationPulse.set(idx, next);
+      }
+    }
+  
+    if (player.currentTime < state.lastPlaybackTime - 0.05) {
+      state.trail = [];
+      state.lastTrailIndex = -1;
+      state.trailVelocity = 0;
+      state.activationPulse.clear();
+    }
+    state.lastPlaybackTime = player.currentTime;
+  
+    if (!player.paused) {
+      const frameIndex = getFrameIndexAtTime(player.currentTime);
+      if (frameIndex >= 0) {
+        const appendNode = (idx) => {
+          const frame = state.map.frames[idx];
+          if (!frame) {
+            return;
+          }
+  
+          state.trail.push({
+            index: idx,
+            x: frame.x,
+            y: frame.y,
+            z: frame.z,
+            color: frame.color,
+            volume: frame.rmsN,
+            flux: frame.fluxN,
+            life: 1,
+          });
+  
+          state.activationPulse.set(idx, 1);
+          if (idx > 0) {
+            state.activationPulse.set(idx - 1, Math.max(state.activationPulse.get(idx - 1) || 0, 0.72));
+          }
+          if (idx < state.map.frames.length - 1) {
+            state.activationPulse.set(idx + 1, Math.max(state.activationPulse.get(idx + 1) || 0, 0.72));
+          }
+        };
+  
+        if (state.lastTrailIndex < 0) {
+          appendNode(frameIndex);
+        } else if (frameIndex !== state.lastTrailIndex) {
+          const jump = Math.abs(frameIndex - state.lastTrailIndex);
+          state.trailVelocity = lerp(state.trailVelocity, jump, 0.26);
+  
+          const step = frameIndex > state.lastTrailIndex ? 1 : -1;
+          let cursor = state.lastTrailIndex + step;
+          let guard = 0;
+          while (cursor !== frameIndex + step && guard < 140) {
+            appendNode(cursor);
+            cursor += step;
+            guard += 1;
+          }
+        }
+  
+        state.lastTrailIndex = frameIndex;
+  
+        const maxTrail = Math.round(clamp(620 - state.trailVelocity * 6.5, 220, 620));
+        if (state.trail.length > maxTrail) {
+          state.trail.splice(0, state.trail.length - maxTrail);
+        }
+      }
+    }
+  
+    const persistence = Number(trailPersistence.value);
+    // Lower persistence should clear trails quickly for responsive rhythm changes.
+    const speedBoost = clamp(state.trailVelocity * 0.03, 0, 1.3);
+    const decayBase = clamp((1 - persistence) * (4.5 + speedBoost * 2.8), 0.04, 1.8);
+  
+    const length = Math.max(1, state.trail.length - 1);
+    for (let i = 0; i < state.trail.length; i += 1) {
+      const node = state.trail[i];
+      const tailAge = 1 - i / length;
+      const tailFadeBoost = 1 + tailAge * (1.6 + speedBoost);
+      const decay = dtMs * 0.001 * decayBase * (1.12 - node.volume * 0.42) * tailFadeBoost;
+      node.life -= decay;
+    }
+  
+    state.trail = state.trail.filter((node) => node.life > 0.02);
+  }
+  
+  function updateCameraMotion(nowSec, dtMs) {
+    const preset = cameraPreset.value;
+    const orbitSpeed = Number(rotationSpeed.value);
+    const pulse = !player.paused ? 1 : 0.4;
+    const motion = Number(motionStrength.value);
+  
+    state.autoYaw += orbitSpeed * dtMs * 0.00034;
+    state.autoPitch = 0;
+    state.autoZoom = 1;
+  
+    if (preset === "static") {
+      state.autoYaw = 0;
+      state.autoPitch = 0;
+      state.autoZoom = 1;
+      return;
+    }
+  
+    if (preset === "orbit") {
+      state.autoYaw += orbitSpeed * dtMs * 0.0002;
+      state.autoPitch = Math.sin(nowSec * 0.34) * 0.08;
+    } else if (preset === "pulse") {
+      state.autoPitch = Math.sin(nowSec * 0.75) * 0.14;
+      state.autoZoom = 1 + Math.sin(nowSec * 1.7) * 0.09 * pulse;
+    } else if (preset === "dive") {
+      state.autoPitch = -0.2 + Math.sin(nowSec * 0.38) * 0.36;
+      state.autoZoom = 1 + Math.sin(nowSec * 0.95) * 0.12 * pulse;
+    } else {
+      state.autoPitch = Math.sin(nowSec * 0.26) * 0.09;
+      state.autoZoom = 1 + Math.sin(nowSec * 0.48) * 0.04 * pulse;
+    }
+  
+    if (!player.paused && state.map?.frames?.length) {
+      const activeIndex = getFrameIndexAtTime(player.currentTime);
+      const frame = activeIndex >= 0 ? state.map.frames[activeIndex] : null;
+      const dolly = computeMicroDolly(frame, nowSec);
+      state.autoZoom += dolly.zoom * (0.015 + motion * 0.01);
+      state.autoPitch += dolly.pitch * (0.02 + motion * 0.012);
+      state.autoYaw += dolly.yaw * (0.0018 + motion * 0.0015);
+    }
+  }
+  
+  function computeViewSpacePoint(x, y, z, nowSec, activity = 0) {
+    const spreadScale = Number(freqSpread.value);
+    const motion = Number(motionStrength.value) * 0.24;
+  
+    let px = (x + Number(offsetX.value)) * spreadScale;
+    let py = (y + Number(offsetY.value));
+    let pz = (z + Number(offsetZ.value)) * spreadScale;
+  
+    if (motion > 0 && activity > 0.001 && !player.paused) {
+      const wave = activity * motion;
+      px += Math.sin(nowSec * 2.1 + x * 0.35 + z * 0.15) * wave;
+      py += Math.cos(nowSec * 1.65 + y * 0.32 + x * 0.1) * wave * 0.85;
+      pz += Math.sin(nowSec * 1.48 + z * 0.28 + y * 0.14) * wave;
+    }
+  
+    const yaw = state.userYaw + state.autoYaw;
+    const pitch = clamp(state.userPitch + state.autoPitch, -1.15, 1.2);
+  
+    const cosY = Math.cos(yaw);
+    const sinY = Math.sin(yaw);
+    const xYaw = px * cosY - pz * sinY;
+    const zYaw = px * sinY + pz * cosY;
+  
+    const cosP = Math.cos(pitch);
+    const sinP = Math.sin(pitch);
+    const yPitch = py * cosP - zYaw * sinP;
+    const zPitch = py * sinP + zYaw * cosP;
+  
+    const zoom = clamp(state.userZoom * state.autoZoom, 0.55, 2.2);
+    const cameraDistance = 24 / zoom;
+    const depth = cameraDistance - zPitch;
+  
+    return {
+      x: xYaw,
+      y: yPitch,
+      z: zPitch,
+      depth,
+    };
+  }
+  
+  function projectPoint3D(x, y, z, nowSec, activity = 0) {
+    const view = computeViewSpacePoint(x, y, z, nowSec, activity);
+    if (!view || view.depth < 0.9) {
+      return null;
+    }
+  
+    const focal = Math.min(state.width, state.height) * 0.96;
+    const perspective = focal / view.depth;
+    return {
+      x: state.width * (0.53 + state.userPanX) + view.x * perspective,
+      y: state.height * (0.54 + state.userPanY) + view.y * perspective,
+      depth: view.depth,
+      perspective,
+      fog: clamp((view.depth - 6) / 26, 0, 1),
+    };
+  }
+  
+  function drawBackground(nowSec) {
+    if (nodesOnly.checked) {
+        if (ctx.fillStyle !== "#000000") ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, state.width, state.height);
+        return;
+    }
+    const preset = PRESET_BACKGROUND[visualPreset.value] || PRESET_BACKGROUND.cinematic;
+    const blur = Number(motionBlur.value);
+    const veilAlpha = clamp(0.02 + blur * 0.07, 0.01, 0.12);
+  
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = `rgb(${preset.vignette[0]}, ${preset.vignette[1]}, ${preset.vignette[2]})`;
+    ctx.fillRect(0, 0, state.width, state.height);
+  
+    if (blur > 0.001) {
+      ctx.fillStyle = `rgba(${preset.vignette[0]}, ${preset.vignette[1]}, ${preset.vignette[2]}, ${veilAlpha.toFixed(3)})`;
+      ctx.fillRect(0, 0, state.width, state.height);
+    }
+  
+    const radial = ctx.createRadialGradient(
+      state.width * 0.5,
+      state.height * 0.46,
+      30,
+      state.width * 0.5,
+      state.height * 0.5,
+      Math.max(state.width, state.height) * 0.8,
+    );
+    radial.addColorStop(0, `rgba(${preset.aura[0]}, ${preset.aura[1]}, ${preset.aura[2]}, 0.11)`);
+    radial.addColorStop(1, `rgba(${preset.core[0]}, ${preset.core[1]}, ${preset.core[2]}, 0.02)`);
+    ctx.fillStyle = radial;
+    ctx.fillRect(0, 0, state.width, state.height);
+  
+    const parallax = (state.userYaw + state.autoYaw) * 0.045;
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+  
+    for (const star of state.stars) {
+      const twinkle = (Math.sin(nowSec * (0.9 + star.depth) + star.twinkle) + 1) * 0.5;
+      const alpha = star.alpha * (0.58 + twinkle * 0.42);
+      const x = ((star.x + parallax * star.depth + 2) % 1) * state.width;
+      const y = star.y * state.height;
+      ctx.fillStyle = `rgba(190, 214, 255, ${alpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(x, y, star.radius * state.dpr * (0.35 + star.depth * 0.7), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  
+    ctx.restore();
+  }
+  
+  function drawTrail(nowSec) {
+    if (state.trail.length < 2) {
+      return;
+    }
+  
+    const flare = Number(trailFlare.value);
+    const blur = Number(motionBlur.value);
+  
+    const projected = [];
+    for (const node of state.trail) {
+      const p = projectPoint3D(node.x, node.y, node.z, nowSec, node.life);
+      if (p) {
+        projected.push({ ...p, node });
+      }
+    }
+  
+    if (projected.length < 2) {
+      return;
+    }
+  
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+  
+    const segmentCount = Math.max(1, projected.length - 1);
+  
+    for (let i = 1; i < projected.length; i += 1) {
+      const a = projected[i - 1];
+      const b = projected[i];
+      const life = Math.min(a.node.life, b.node.life);
+      const energy = (a.node.volume + b.node.volume + a.node.flux + b.node.flux) * 0.25;
+      const headBias = i / segmentCount;
+      const meteorBoost = Math.pow(headBias, 1.45);
+      const tailFade = 1 - Math.pow(1 - headBias, 1.85);
+  
+      const tailDesolve = Number(edgeTailFade.value);
+      const alphaWide = clamp(
+        life * (0.02 + energy * 0.36) * (0.45 + tailFade * (0.9 + flare * 0.85)),
+        0.01,
+        0.68,
+      );
+      ctx.strokeStyle = rgba(b.node.color, alphaWide.toFixed(3));
+      ctx.lineWidth = 1.35 + energy * (3.4 + flare * 2.4) + meteorBoost * (3.6 + flare * 4.2);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+  
+      const alphaCore = clamp(
+        life * (0.08 + energy * 0.72) * (0.55 + tailFade * (1 + flare * 0.95)),
+        0.03,
+        0.96,
+      );
+      ctx.strokeStyle = rgba(b.node.color, alphaCore.toFixed(3));
+      ctx.lineWidth = 0.72 + energy * (1.6 + flare * 1.1) + meteorBoost * (1.9 + flare * 1.7);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+  
+      if (blur > 0.01) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const bx = (dx / len) * blur * (2 + state.trailVelocity * 0.22);
+        const by = (dy / len) * blur * (2 + state.trailVelocity * 0.22);
+  
+        const blurColor = shiftToInfra(b.node.color, clamp(tailDesolve * 0.38, 0, 1));
+        ctx.strokeStyle = rgba(blurColor, clamp(alphaCore * 0.22, 0.01, 0.2).toFixed(3));
+        ctx.lineWidth = Math.max(0.5, 0.8 + energy * 1.2);
+        ctx.beginPath();
+        ctx.moveTo(a.x - bx, a.y - by);
+        ctx.lineTo(b.x - bx, b.y - by);
+        ctx.stroke();
+      }
+    }
+  
+    if (!player.paused) {
+      const head = projected[projected.length - 1];
+      if (head) {
+        const radius = 14 + head.node.volume * (16 + flare * 6.5);
+        const glow = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, radius);
+        glow.addColorStop(0, rgba(head.node.color, clamp(0.76 + flare * 0.16, 0.76, 1).toFixed(3)));
+        glow.addColorStop(1, rgba(head.node.color, 0));
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+  
+        const prev = projected[projected.length - 2];
+        if (prev) {
+          const dx = head.x - prev.x;
+          const dy = head.y - prev.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const ux = dx / len;
+          const uy = dy / len;
+          const streakLen = 10 + flare * 26 + head.node.flux * 18;
+  
+          const streak = ctx.createLinearGradient(
+            head.x - ux * streakLen,
+            head.y - uy * streakLen,
+            head.x + ux * 2,
+            head.y + uy * 2,
+          );
+          streak.addColorStop(0, rgba(head.node.color, 0));
+          streak.addColorStop(0.72, rgba(head.node.color, clamp(0.24 + flare * 0.2, 0.24, 0.65).toFixed(3)));
+          streak.addColorStop(1, rgba(head.node.color, clamp(0.84 + flare * 0.12, 0.84, 1).toFixed(3)));
+  
+          ctx.strokeStyle = streak;
+          ctx.lineWidth = 1.4 + flare * 2.2;
+          ctx.beginPath();
+          ctx.moveTo(head.x - ux * streakLen, head.y - uy * streakLen);
+          ctx.lineTo(head.x + ux * 2, head.y + uy * 2);
+          ctx.stroke();
+        }
+      }
+    }
+  
+    ctx.restore();
+  }
+  
+  function drawFlowParticles(activeIndex, nowSec) {
+    if (!state.map || player.paused || activeIndex < 2) {
+      return;
+    }
+  
+    const density = Number(flowDensity.value);
+    const particleCount = Math.floor(14 + density * 70);
+    const pathLength = Math.min(340, activeIndex);
+    const speed = 0.25 + Number(motionStrength.value) * 0.42;
+  
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+  
+    for (let i = 0; i < particleCount; i += 1) {
+      const phase = (nowSec * speed + i / particleCount) % 1;
+      const idxFloat = activeIndex - phase * pathLength;
+      const sample = sampleFrameAt(idxFloat);
+      const ahead = sampleFrameAt(idxFloat - 1.3);
+      const behind = sampleFrameAt(idxFloat + 1.3);
+  
+      if (!sample || !ahead || !behind) {
+        continue;
+      }
+  
+      const p = projectPoint3D(sample.x, sample.y, sample.z, nowSec, 1);
+      const pA = projectPoint3D(ahead.x, ahead.y, ahead.z, nowSec, 1);
+      const pB = projectPoint3D(behind.x, behind.y, behind.z, nowSec, 1);
+      if (!p || !pA || !pB) {
+        continue;
+      }
+  
+      const dx = pA.x - pB.x;
+      const dy = pA.y - pB.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = dx / len;
+      const ny = dy / len;
+  
+      const e = clamp((sample.volume + sample.flux) * 0.5, 0, 1);
+      const trailLen = 6 + e * 26;
+      const alpha = clamp(0.14 + e * 0.72, 0.1, 0.92);
+  
+      ctx.strokeStyle = rgba(sample.color, alpha.toFixed(3));
+      ctx.lineWidth = 0.8 + e * 2.5;
+      ctx.beginPath();
+      ctx.moveTo(p.x - nx * trailLen, p.y - ny * trailLen);
+      ctx.lineTo(p.x + nx * trailLen * 0.2, p.y + ny * trailLen * 0.2);
+      ctx.stroke();
+  
+      ctx.fillStyle = rgba(sample.color, clamp(alpha * 1.16, 0.2, 0.98).toFixed(3));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 0.9 + e * 2.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  
+    ctx.restore();
+  }
+  
+  function drawEdges(byIndex, visibleIndices, activeIndex, nowSec) {
+    if (!state.map || !showConnections.checked) {
+      return;
+    }
+  
+    const mode = edgeMode.value;
+    const edgeStrength = Number(edgeOpacity.value);
+    const trailLength = Number(edgeTrailLength.value);
+    const tailFade = Number(edgeTailFade.value);
+    const solidness = Number(edgeSolidness.value);
+    const neighborVisibility = Number(knnBoost.value);
+    const window = 6 + Number(flowDensity.value) * 18;
+    const cinemaBoost = cinemaMode.checked ? 1.15 : 0.72;
+    const glowShiftAmt = Number(glowShift.value);
+    const idleVisibility = activeIndex < 0 ? 0.52 : 1;
+    const playbackTime = !player.paused ? player.currentTime : nowSec;
+    const liveFrame = getInterpolatedFrameAtTime(playbackTime);
+    const useWave = edgeStyle?.value === "wave";
+  
+    const registerConnectionPulse = (index, amount) => {
+      if (index < 0) {
+        return;
+      }
+      const current = state.connectionPulse.get(index) || 0;
+      state.connectionPulse.set(index, Math.max(current, amount));
+    };
+  
+    const drawCometSegmentWave = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB, freqFactor) => {
+      const phase = (playbackTime * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
+      const lenRatio = clamp(trailLength * (0.45 + activity * 0.9), 0.16, 1);
+      const t1 = phase;
+      const t0 = Math.max(0, t1 - lenRatio);
+  
+      if (t1 <= 0.001) {
+        return;
+      }
+  
+      const dx = bx - ax;
+      const dy = by - ay;
+      const dist = Math.hypot(dx, dy) || 1;
+      const nx = dx / dist;
+      const ny = dy / dist;
+      // Perpendicular vector
+      const px = -ny;
+      const py = nx;
+  
+      // Wave properties are synced to current playback frequency.
+      const waveFreq = 1.1 + freqFactor * 9.5;
+      const waveAmp = Math.min(dist * 0.14, (1.25 + freqFactor * 3.9) * (0.42 + activity * 1.15));
+      const waveSpeed = 0.55 + freqFactor * 2.2 + Number(motionStrength.value) * 0.55;
+  
+      const getWavePoint = (t) => {
+        const lx = ax + dx * t;
+        const ly = ay + dy * t;
+        // Envelope pins wave exactly at both nodes.
+        const envelope = Math.sin(t * Math.PI);
+        const angle = t * Math.PI * 2 * waveFreq + playbackTime * waveSpeed * Math.PI * 2;
+        const offset = Math.sin(angle) * waveAmp * envelope;
+        return {
+          x: lx + px * offset,
+          y: ly + py * offset,
+        };
+      };
+  
+      const tailColor = shiftToInfra(color, clamp(glowShiftAmt * (0.22 + (1 - activity) * 0.5), 0, 1));
+      const backboneAlpha = clamp(alpha * (0.08 + solidness * (0.62 + tailFade * 0.16)), 0.006, 0.56);
+  
+      // Draw full wave backbone.
+      ctx.strokeStyle = rgba(tailColor, backboneAlpha.toFixed(3));
+      ctx.lineWidth = Math.max(0.24, 0.34 + width * (0.16 + solidness * 0.08));
+      ctx.beginPath();
+      const steps = Math.max(12, Math.floor(dist / 3));
+      for (let i = 0; i <= steps; i++) {
+        const p = getWavePoint(i / steps);
+        if (i === 0) {
+          ctx.moveTo(p.x, p.y);
+        } else {
+          ctx.lineTo(p.x, p.y);
+        }
+      }
+      ctx.stroke();
+  
+      // Draw active comet segment.
+      const startWave = getWavePoint(t0);
+      const endWave = getWavePoint(t1);
+      const grad = ctx.createLinearGradient(startWave.x, startWave.y, endWave.x, endWave.y);
+      const particleMix = clamp(1.08 - solidness * 0.86, 0.16, 1.08);
+      grad.addColorStop(0, rgba(tailColor, clamp(alpha * (0.06 + tailFade * 0.1) * particleMix, 0.004, 0.22).toFixed(3)));
+      grad.addColorStop(0.55, rgba(color, clamp(alpha * (0.22 + tailFade * 0.24) * particleMix, 0.008, 0.56).toFixed(3)));
+      grad.addColorStop(1, rgba(color, clamp(alpha * 1.12 * particleMix, 0.03, 0.98).toFixed(3)));
+  
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = Math.max(0.32, width * (0.86 - solidness * 0.34));
+      ctx.beginPath();
+  
+      // Draw only the active [t0, t1] section.
+      const subSteps = Math.ceil(steps * (t1 - t0));
+      const safeSubSteps = Math.max(4, subSteps);
+  
+      for (let i = 0; i <= safeSubSteps; i++) {
+        const localT = i / safeSubSteps;
+        const t = t0 + localT * (t1 - t0);
+        const p = getWavePoint(t);
+        if (i === 0) {
+          ctx.moveTo(p.x, p.y);
+        } else {
+          ctx.lineTo(p.x, p.y);
+        }
+      }
+      ctx.stroke();
+  
+      if (t1 > 0.94) {
+        registerConnectionPulse(edgeB, clamp(activity * Number(nodeHitPulse.value), 0, 2.8));
+      }
+      if (t0 < 0.06) {
+        registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
+      }
+    };
+  
+    const drawCometSegmentLine = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB) => {
+      const phase = (playbackTime * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
+      const len = clamp(trailLength * (0.45 + activity * 0.9), 0.16, 1);
+      const t1 = phase;
+      const t0 = Math.max(0, t1 - len);
+  
+      if (t1 <= 0.001) {
+        return;
+      }
+  
+      const x0 = lerp(ax, bx, t0);
+      const y0 = lerp(ay, by, t0);
+      const x1 = lerp(ax, bx, t1);
+      const y1 = lerp(ay, by, t1);
+  
+      const tailColor = shiftToInfra(color, clamp(glowShiftAmt * (0.22 + (1 - activity) * 0.5), 0, 1));
+  
+      const backboneAlpha = clamp(alpha * (0.08 + solidness * (0.62 + tailFade * 0.16)), 0.006, 0.56);
+      ctx.strokeStyle = rgba(tailColor, backboneAlpha.toFixed(3));
+      ctx.lineWidth = Math.max(0.24, 0.34 + width * (0.16 + solidness * 0.08));
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+  
+      const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+      const particleMix = clamp(1.08 - solidness * 0.86, 0.16, 1.08);
+      grad.addColorStop(0, rgba(tailColor, clamp(alpha * (0.06 + tailFade * 0.1) * particleMix, 0.004, 0.22).toFixed(3)));
+      grad.addColorStop(0.55, rgba(color, clamp(alpha * (0.22 + tailFade * 0.24) * particleMix, 0.008, 0.56).toFixed(3)));
+      grad.addColorStop(1, rgba(color, clamp(alpha * 1.12 * particleMix, 0.03, 0.98).toFixed(3)));
+  
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = Math.max(0.32, width * (0.86 - solidness * 0.34));
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+  
+      if (t1 > 0.94) {
+        registerConnectionPulse(edgeB, clamp(activity * Number(nodeHitPulse.value), 0, 2.8));
+      }
+      if (t0 < 0.06) {
+        registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
+      }
+    };
+  
+    const drawCometSegmentCurve = (a, b, cx, cy, color, alpha, width, phaseSeed, activity, edgeA, edgeB) => {
+      const phase = (playbackTime * (0.62 + Number(motionStrength.value) * 0.22) + phaseSeed) % 1;
+      const len = clamp(trailLength * (0.42 + activity * 0.95), 0.14, 1);
+      const t1 = phase;
+      const t0 = Math.max(0, t1 - len);
+      if (t1 <= 0.001) {
+        return;
+      }
+  
+      const q = (t, p0, p1, p2) => (1 - t) * (1 - t) * p0 + 2 * (1 - t) * t * p1 + t * t * p2;
+      const steps = Math.max(4, Math.ceil(8 + activity * 8));
+  
+      const tailColor = shiftToInfra(color, clamp(glowShiftAmt * (0.22 + (1 - activity) * 0.5), 0, 1));
+  
+      const backboneAlpha = clamp(alpha * (0.08 + solidness * (0.62 + tailFade * 0.16)), 0.006, 0.56);
+      ctx.strokeStyle = rgba(tailColor, backboneAlpha.toFixed(3));
+      ctx.lineWidth = Math.max(0.24, 0.34 + width * (0.16 + solidness * 0.08));
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(cx, cy, b.x, b.y);
+      ctx.stroke();
+  
+      const xStart = q(t0, a.x, cx, b.x);
+      const yStart = q(t0, a.y, cy, b.y);
+      const xEnd = q(t1, a.x, cx, b.x);
+      const yEnd = q(t1, a.y, cy, b.y);
+      const grad = ctx.createLinearGradient(xStart, yStart, xEnd, yEnd);
+      const particleMix = clamp(1.08 - solidness * 0.86, 0.16, 1.08);
+      grad.addColorStop(0, rgba(tailColor, clamp(alpha * (0.06 + tailFade * 0.1) * particleMix, 0.004, 0.22).toFixed(3)));
+      grad.addColorStop(0.55, rgba(color, clamp(alpha * (0.22 + tailFade * 0.24) * particleMix, 0.008, 0.56).toFixed(3)));
+      grad.addColorStop(1, rgba(color, clamp(alpha * 1.12 * particleMix, 0.03, 0.98).toFixed(3)));
+  
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = Math.max(0.32, width * (0.86 - solidness * 0.34));
+      ctx.beginPath();
+      for (let step = 0; step <= steps; step += 1) {
+        const t = lerp(t0, t1, step / steps);
+        const x = q(t, a.x, cx, b.x);
+        const y = q(t, a.y, cy, b.y);
+        if (step === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+  
+      if (t1 > 0.94) {
+        registerConnectionPulse(edgeB, clamp(activity * Number(nodeHitPulse.value), 0, 2.8));
+      }
+      if (t0 < 0.06) {
+        registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
+      }
+    };
+  
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+  
+    if (mode === "temporal" || mode === "both") {
+      for (let i = 1; i < visibleIndices.length; i += 1) {
+        const edgeA = visibleIndices[i - 1];
+        const edgeB = visibleIndices[i];
+        const a = byIndex.get(edgeA);
+        const b = byIndex.get(edgeB);
+        if (!a || !b) {
+          continue;
+        }
+  
+        const activity = Math.max(
+          activityForIndex(edgeA, activeIndex, window),
+          activityForIndex(edgeB, activeIndex, window),
+        );
+  
+        const alpha = clamp((0.04 + activity * 0.42) * edgeStrength * cinemaBoost * idleVisibility, 0.01, 0.74);
+        const width = 0.52 + activity * 2.25;
+        const color = activity > 0.04 ? b.frame.color : { r: 105, g: 118, b: 138 };
+        const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
+  
+        if (useWave) {
+          drawCometSegmentWave(
+            a.x,
+            a.y,
+            b.x,
+            b.y,
+            color,
+            alpha,
+            width,
+            edgeA * 0.019 + edgeB * 0.013,
+            activity,
+            edgeA,
+            edgeB,
+            freqFactor,
+          );
+        } else {
+          const curve = (0.08 + Number(motionStrength.value) * 0.07 + activity * 0.28) * Math.sin(playbackTime * 0.8 + edgeA * 0.02);
+          const cx = (a.x + b.x) * 0.5 + (b.y - a.y) * curve;
+          const cy = (a.y + b.y) * 0.5 - (b.x - a.x) * curve;
+          drawCometSegmentCurve(a, b, cx, cy, color, alpha, width, edgeA * 0.019 + edgeB * 0.013, activity, edgeA, edgeB);
+        }
+      }
+    }
+  
+    if (mode === "knn" || mode === "both") {
+      const stride = state.map.knnEdges.length > 6200 ? 2 : 1;
+  
+      for (let i = 0; i < state.map.knnEdges.length; i += stride) {
+        const edge = state.map.knnEdges[i];
+        const a = byIndex.get(edge.a);
+        const b = byIndex.get(edge.b);
+        if (!a || !b) {
+          continue;
+        }
+  
+        const activity = Math.max(
+          activityForIndex(edge.a, activeIndex, window * 0.86),
+          activityForIndex(edge.b, activeIndex, window * 0.86),
+        );
+  
+        const alpha = clamp(
+          (0.025 + edge.weight * 0.16 * neighborVisibility + activity * 0.26) * edgeStrength * (cinemaMode.checked ? 1 : 0.8) * idleVisibility,
+          0.008,
+          0.7,
+        );
+        const width = 0.5 + edge.weight * 1.42 * neighborVisibility + activity * 1.2;
+        const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
+  
+        if (!useWave) {
+          drawCometSegmentLine(
+            a.x,
+            a.y,
+            b.x,
+            b.y,
+            b.frame.color,
+            alpha,
+            width,
+            edge.a * 0.017 + edge.b * 0.021,
+            activity,
+            edge.a,
+            edge.b,
+          );
+        } else {
+          drawCometSegmentWave(
+            a.x,
+            a.y,
+            b.x,
+            b.y,
+            b.frame.color,
+            alpha,
+            width,
+            edge.a * 0.017 + edge.b * 0.021,
+            activity,
+            edge.a,
+            edge.b,
+            freqFactor,
+          );
+        }
+      }
+    }
+  
+    ctx.restore();
+  }
+  
+  function drawLabels(projected, activeIndex) {
+    if (!showLabels.checked || projected.length === 0) {
+      return;
+    }
+  
+    const dpr = Math.max(1, state.dpr || 1);
+    const densityMap = buildLocalDensityMap(projected, Math.max(22 * dpr, 52));
+  
+    const ranked = [...projected]
+      .map((item) => ({
+        item,
+        score: item.radius * (0.7 + item.frame.rmsN * 0.7 + item.activity * 1.1),
+      }))
+      .sort((a, b) => b.score - a.score);
+  
+    const stableCount = Math.min(56, ranked.length);
+    const activeCount = Math.min(86, ranked.length);
+  
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+  
+    for (let i = 0; i < stableCount; i += 1) {
+      const item = ranked[i].item;
+      if (item.radius < 0.8) {
+        continue;
+      }
+  
+      const localDensity = densityMap.get(item.index) || 1;
+      const densityScale = computeLabelDensityScale(localDensity);
+      const alpha = clamp((0.16 + item.frame.rmsN * 0.28) * densityScale, 0.08, 0.45);
+      const fontPx = (8 + Math.min(4, item.radius * 0.2)) * dpr;
+  
+      ctx.font = `${fontPx.toFixed(1)}px "IBM Plex Mono", "SFMono-Regular", Menlo, monospace`;
+      ctx.strokeStyle = `rgba(4, 8, 14, ${(alpha * 0.9).toFixed(3)})`;
+      ctx.fillStyle = rgba(item.frame.color, alpha.toFixed(3));
+      ctx.lineWidth = 2.2 * dpr;
+  
+      const lx = item.x + item.radius + 3 * dpr;
+      const ly = item.y - item.radius * 0.08;
+      ctx.strokeText(item.frame.label, lx, ly);
+      ctx.fillText(item.frame.label, lx, ly);
+    }
+  
+    if (activeIndex >= 0) {
+      for (let i = 0; i < activeCount; i += 1) {
+        const item = ranked[i].item;
+        const focus = activityForIndex(item.index, activeIndex, 8);
+        if (focus < 0.26) {
+          continue;
+        }
+  
+        const localDensity = densityMap.get(item.index) || 1;
+        const densityScale = computeLabelDensityScale(localDensity);
+        const alpha = clamp((0.45 + focus * 0.45) * densityScale, 0.32, 0.95);
+        const fontPx = (9 + focus * 4.4) * dpr;
+  
+        ctx.font = `${fontPx.toFixed(1)}px "IBM Plex Mono", "SFMono-Regular", Menlo, monospace`;
+        ctx.strokeStyle = `rgba(4, 8, 14, ${(alpha * 0.94).toFixed(3)})`;
+        ctx.fillStyle = rgba(item.frame.color, alpha.toFixed(3));
+        ctx.lineWidth = 2.7 * dpr;
+  
+        const lx = item.x + item.radius + 4 * dpr;
+        const ly = item.y - item.radius * (0.16 + focus * 0.22);
+        ctx.strokeText(item.frame.label, lx, ly);
+        ctx.fillText(item.frame.label, lx, ly);
+      }
+    }
+  
+    ctx.restore();
+  }
+  
+  function drawPoints(projected, activeIndex, nowSec) {
+    const bloom = Number(bloomStrength.value);
+    const glowGain = Number(glowIntensity.value);
+    const glowGate = Number(glowThreshold.value);
+    const glowShiftAmt = Number(glowShift.value);
+    const glowDecayRate = Number(glowDecay.value);
+    const fog = Number(fogStrength.value);
+    const pointAlpha = Number(pointOpacity.value);
+    const pointDepthAmount = Number(pointDepth.value);
+    const pulseControl = Number(pulseStrength.value);
+    const motion = Number(motionStrength.value);
+    const bg = PRESET_BACKGROUND[visualPreset.value] || PRESET_BACKGROUND.cinematic;
+    const atmosphereColor = { r: bg.aura[0], g: bg.aura[1], b: bg.aura[2] };
+  
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+  
+    for (const item of projected) {
+      const fogFactor = clamp(item.fog * fog, 0, 1);
+      const darkMix = clamp(0.26 + fogFactor * 0.55, 0.26, 0.86);
+      const tintedBase = mixColor(item.frame.color, { r: 10, g: 14, b: 20 }, darkMix);
+      const atmosphereMix = computeAtmosphereMix(fogFactor, item.depth);
+      const baseColor = mixColor(tintedBase, atmosphereColor, atmosphereMix);
+  
+      const baseAlpha = clamp((0.18 + item.frame.rmsN * 0.4 - fogFactor * 0.18) * pointAlpha, 0.1, 0.96);
+      const pulsePhase = Math.sin(nowSec * 18 + item.index * 0.41) * 0.5 + 0.5;
+      const pulseEnvelope = clamp((item.activity * 0.58 + item.pulse * 1.45 + item.connectionPulse * 1.25) * pulseControl, 0, 3.8);
+      const pulseScale = 1 + pulseEnvelope * (0.16 + 0.28 * pulsePhase);
+      const px = item.x;
+      const py = item.y;
+      const radius = Math.max(0.55, item.radius * (0.74 + item.activity * 0.18) * pulseScale);
+  
+      const sphereGradient = ctx.createRadialGradient(
+        px - radius * (0.3 + pointDepthAmount * 0.12),
+        py - radius * (0.32 + pointDepthAmount * 0.1),
+        Math.max(0.1, radius * 0.16),
+        px,
+        py,
+        radius * (1 + pointDepthAmount * 0.42),
+      );
+      sphereGradient.addColorStop(0, rgba(mixColor(item.frame.color, { r: 255, g: 255, b: 255 }, 0.46), clamp(baseAlpha * 1.14, 0.16, 1).toFixed(3)));
+      sphereGradient.addColorStop(0.42, rgba(baseColor, clamp(baseAlpha * (0.86 + pointDepthAmount * 0.18), 0.1, 1).toFixed(3)));
+      sphereGradient.addColorStop(1, rgba(mixColor(baseColor, { r: 4, g: 6, b: 10 }, 0.42), clamp(baseAlpha * (0.58 + pointDepthAmount * 0.22), 0.06, 0.96).toFixed(3)));
+  
+      ctx.fillStyle = sphereGradient;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
+  
+      const highlight = mixColor(item.frame.color, { r: 255, g: 255, b: 255 }, 0.22);
+      ctx.fillStyle = rgba(highlight, clamp(baseAlpha * (0.6 + pulseEnvelope * 0.2), 0.08, 0.74).toFixed(3));
+      ctx.beginPath();
+      ctx.arc(px - radius * 0.3, py - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  
+    ctx.restore();
+  
+    if (!cinemaMode.checked) {
+      return;
+    }
+  
+    // Glow is only applied around active playback regions to avoid constant overexposure.
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+  
+    for (const item of projected) {
+      const glowActivity = Math.max(item.activity, item.pulse * 1.2, item.connectionPulse * 1.1);
+      if (glowActivity < glowGate) {
+        continue;
+      }
+  
+      const pulsePhase = Math.sin(nowSec * 14 + item.index * 0.43) * 0.5 + 0.5;
+      const pulseEnvelope = clamp((item.activity * 0.5 + item.pulse * 1.4) * pulseControl, 0, 3.2);
+      const px = item.x;
+      const py = item.y;
+      const glowPower = clamp(
+        glowActivity * (0.3 + item.frame.rmsN * 0.86) * (0.42 + bloom * 0.52) * pointAlpha * glowGain * (0.8 + pulsePhase * 0.24),
+        0.02,
+        0.78,
+      );
+      const glowRadius = item.radius * (1.2 + item.activity * 3.1 + bloom * 1.4 + item.connectionPulse * 0.65);
+  
+      const tailColor = shiftToInfra(
+        item.frame.color,
+        clamp(glowShiftAmt * (0.22 + (1 - clamp(Number(motionStrength.value) / 3, 0, 1)) * 0.56), 0, 1),
+      );
+  
+      const gradient = ctx.createRadialGradient(px, py, 0, px, py, glowRadius);
+      gradient.addColorStop(0, rgba(item.frame.color, glowPower.toFixed(3)));
+      gradient.addColorStop(clamp(0.45 / Math.max(0.2, glowDecayRate), 0.18, 0.7), rgba(item.frame.color, clamp(glowPower * 0.24, 0.02, 0.3).toFixed(3)));
+      gradient.addColorStop(1, rgba(tailColor, 0));
+  
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(px, py, glowRadius, 0, Math.PI * 2);
+      ctx.fill();
+  
+      const coreAlpha = clamp(glowPower * (0.7 + pulseEnvelope * 0.06), 0.04, 0.96);
+      ctx.fillStyle = rgba(item.frame.color, coreAlpha.toFixed(3));
+      ctx.beginPath();
+      ctx.arc(px, py, Math.max(0.8, item.radius * (0.64 + item.activity * 0.4) * (1 + pulseEnvelope * 0.12)), 0, Math.PI * 2);
+      ctx.fill();
+  
+      const aberration = computeAberrationStrength({
+        activity: item.activity,
+        flux: item.frame.fluxN,
+        motion,
+        cinemaEnabled: cinemaMode.checked,
+      });
+  
+      if (aberration > 0) {
+        const shift = (0.8 + item.radius * 0.14) * aberration;
+        const ghostRadius = Math.max(0.7, item.radius * 0.64);
+  
+        ctx.fillStyle = `rgba(255, 86, 118, ${clamp(0.06 + aberration * 0.22, 0.06, 0.28).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(px - shift, py, ghostRadius, 0, Math.PI * 2);
+        ctx.fill();
+  
+        ctx.fillStyle = `rgba(94, 162, 255, ${clamp(0.06 + aberration * 0.2, 0.06, 0.26).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(px + shift, py, ghostRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  
+    const active = projected.find((item) => item.index === activeIndex);
+    if (active) {
+      ctx.strokeStyle = rgba(active.frame.color, 0.96);
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(active.x, active.y, active.radius * 2.7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  
+    ctx.restore();
+  }
+  
+  function drawMap(nowSec) {
+    if (!state.map) {
+      return;
+    }
+  
+    const decimate = Math.max(1, Number(displayDecimation.value));
+    const sizeScale = Number(pointScale.value);
+    const activeIndex = !player.paused ? getFrameIndexAtTime(player.currentTime) : -1;
+    const activityWindow = 6 + Number(flowDensity.value) * 18;
+  
+    const projected = [];
+    const byIndex = new Map();
+    const visibleIndices = [];
+    state.connectionPulse.clear();
+  
+    for (let i = 0; i < state.map.frames.length; i += decimate) {
+      const frame = state.map.frames[i];
+      const pulse = state.activationPulse.get(i) || 0;
+      const activity = clamp(activityForIndex(i, activeIndex, activityWindow) + pulse * 1.15, 0, 2.2);
+      const p = projectPoint3D(frame.x, frame.y, frame.z, nowSec, activity);
+  
+      if (!p) {
+        continue;
+      }
+  
+      const radius = clamp(frame.size * sizeScale * p.perspective * 0.09, 0.45, 22);
+      const item = {
+        index: i,
+        frame,
+        x: p.x,
+        y: p.y,
+        depth: p.depth,
+        fog: p.fog,
+        radius,
+        activity,
+        pulse,
+        connectionPulse: 0,
+      };
+  
+      projected.push(item);
+      byIndex.set(i, item);
+      visibleIndices.push(i);
+    }
+  
+    projected.sort((a, b) => b.depth - a.depth);
+  
+    if (!nodesOnly.checked) {
+        drawEdges(byIndex, visibleIndices, activeIndex, nowSec);
+    }
+  
+    for (const item of projected) {
+      item.connectionPulse = state.connectionPulse.get(item.index) || 0;
+    }
+  
+    drawPoints(projected, activeIndex, nowSec);
+    
+    if (!nodesOnly.checked) {
+        drawLabels(projected, activeIndex);
+        drawFlowParticles(activeIndex, nowSec);
+    }
+  
+    let active = byIndex.get(activeIndex);
+    if (!active && activeIndex >= 0) {
+      const snapped = Math.round(activeIndex / decimate) * decimate;
+      const left = Math.max(0, snapped - decimate);
+      const right = Math.min(state.map.frames.length - 1, snapped + decimate);
+      active = byIndex.get(snapped) || byIndex.get(left) || byIndex.get(right) || null;
+    }
+  
+    if (active) {
+      metricRms.textContent = active.frame.rms.toFixed(3);
+      metricCentroid.textContent = `${Math.round(active.frame.centroidHz)} Hz`;
+      metricSpread.textContent = `${active.frame.spreadKhz.toFixed(2)} kHz`;
+    }
+  }
+
+  return {
+    updateTrail,
+    updateCameraMotion,
+    computeViewSpacePoint,
+    projectPoint3D,
+    drawBackground,
+    drawTrail,
+    drawFlowParticles,
+    drawEdges,
+    drawLabels,
+    drawPoints,
+    drawMap,
+  };
+}

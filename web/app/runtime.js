@@ -1,0 +1,373 @@
+export function createRuntime() {
+  const canvas = document.getElementById("preview-canvas");
+  const ctx = canvas.getContext("2d", { alpha: false });
+  const stage = document.querySelector(".stage");
+  
+  const fileInput = document.getElementById("audio-file");
+  const fileLabel = document.getElementById("file-label");
+  const player = document.getElementById("player");
+  const playToggle = document.getElementById("play-toggle");
+  const pauseAudioBtn = document.getElementById("pause-audio");
+  const resetViewBtn = document.getElementById("reset-view");
+  const sessionState = document.getElementById("session-state");
+  const trackCaption = document.getElementById("track-caption");
+  
+  const drawerToggle = document.getElementById("drawer-toggle");
+  const controlDrawer = document.getElementById("control-drawer");
+  const tabButtons = Array.from(document.querySelectorAll(".tab-btn[data-tab-target]"));
+  
+  const mappingMode = document.getElementById("mapping-mode");
+  const cameraPreset = document.getElementById("camera-preset");
+  const dragMode = document.getElementById("drag-mode");
+  const edgeMode = document.getElementById("edge-mode");
+  const edgeStyle = document.getElementById("edge-style");
+  const displayDecimation = document.getElementById("display-decimation");
+  const knnNeighbors = document.getElementById("knn-neighbors");
+  const knnBoost = document.getElementById("knn-boost");
+  const freqSpread = document.getElementById("freq-spread");
+  
+  const pointScale = document.getElementById("point-scale");
+  const pointOpacity = document.getElementById("point-opacity");
+  const pointDepth = document.getElementById("point-depth");
+  const edgeOpacity = document.getElementById("edge-opacity");
+  const edgeSolidness = document.getElementById("edge-solidness");
+  const edgeTrailLength = document.getElementById("edge-trail-length");
+  const edgeTailFade = document.getElementById("edge-tail-fade");
+  const trailPersistence = document.getElementById("trail-persistence");
+  const trailFlare = document.getElementById("trail-flare");
+  const flowDensity = document.getElementById("flow-density");
+  const pulseStrength = document.getElementById("pulse-strength");
+  const nodeHitPulse = document.getElementById("node-hit-pulse");
+  const motionStrength = document.getElementById("motion-strength");
+  const motionBlur = document.getElementById("motion-blur");
+  const rotationSpeed = document.getElementById("rotation-speed");
+  
+  const visualPreset = document.getElementById("visual-preset");
+  const customPresetSelect = document.getElementById("custom-preset-select");
+  const customPresetName = document.getElementById("custom-preset-name");
+  const saveCustomPresetBtn = document.getElementById("save-custom-preset");
+  const deleteCustomPresetBtn = document.getElementById("delete-custom-preset");
+  const bloomStrength = document.getElementById("bloom-strength");
+  const glowIntensity = document.getElementById("glow-intensity");
+  const glowThreshold = document.getElementById("glow-threshold");
+  const glowShift = document.getElementById("glow-shift");
+  const glowDecay = document.getElementById("glow-decay");
+  const fogStrength = document.getElementById("fog-strength");
+  const colorMetric = document.getElementById("color-metric");
+  const paletteFile = document.getElementById("palette-file");
+  const clearPaletteBtn = document.getElementById("clear-palette");
+  const exportMode = document.getElementById("export-mode");
+  
+  const showConnections = document.getElementById("show-connections");
+  const showLabels = document.getElementById("show-labels");
+  const cinemaMode = document.getElementById("cinema-mode");
+  
+  const captureStillBtn = document.getElementById("capture-still");
+  const exportAnalysisJsonBtn = document.getElementById("export-analysis-json");
+  const export3dObjBtn = document.getElementById("export-3d-obj");
+  const startRecordingBtn = document.getElementById("start-recording");
+  const stopRecordingBtn = document.getElementById("stop-recording");
+  
+  const legendTitle = document.querySelector(".legend-title");
+  const legendBar = document.getElementById("legend-bar");
+  const legendScale = document.getElementById("legend-scale");
+  
+  const helpBtn = document.getElementById("help-btn");
+  const helpModal = document.getElementById("help-modal");
+  const closeHelpBtn = document.getElementById("close-help");
+  
+  const nodesOnly = document.getElementById("nodes-only");
+  const voiceStem = document.getElementById("voice-stem");
+  const offsetX = document.getElementById("offset-x");
+  const offsetY = document.getElementById("offset-y");
+  const offsetZ = document.getElementById("offset-z");
+  const valOffsetX = document.getElementById("val-offset-x");
+  const valOffsetY = document.getElementById("val-offset-y");
+  const valOffsetZ = document.getElementById("val-offset-z");
+  
+  const metricRms = document.getElementById("metric-rms");
+  const metricCentroid = document.getElementById("metric-centroid");
+  const metricSpread = document.getElementById("metric-spread");
+  
+  const VOICE_API_BASE = (window.localStorage.getItem("sgm.voice-api-base") || "http://127.0.0.1:5180").replace(/\/+$/, "");
+  const VOICE_API_ANALYZE_URL = `${VOICE_API_BASE}/api/voice/analyze`;
+  
+  const FFT_SIZE = 1024;
+  const HOP_SIZE = 512;
+  const MAX_POINTS = 2600;
+  const MAX_KNN_EDGES = 9500;
+  const EPSILON = 1e-12;
+  const CUSTOM_PRESETS_KEY = "sgm.custom-presets.v1";
+  
+  const PRESET_PALETTES = {
+    cinematic: [
+      [0.0, [80, 98, 255]],
+      [0.18, [182, 82, 232]],
+      [0.39, [237, 72, 81]],
+      [0.57, [255, 142, 68]],
+      [0.77, [82, 229, 107]],
+      [1.0, [255, 241, 100]],
+    ],
+    scientific: [
+      [0.0, [77, 120, 208]],
+      [0.2, [116, 105, 215]],
+      [0.4, [238, 95, 92]],
+      [0.58, [248, 154, 80]],
+      [0.8, [113, 211, 106]],
+      [1.0, [232, 235, 126]],
+    ],
+    neon: [
+      [0.0, [62, 75, 255]],
+      [0.18, [210, 58, 255]],
+      [0.38, [255, 72, 108]],
+      [0.58, [255, 163, 45]],
+      [0.78, [76, 244, 114]],
+      [1.0, [255, 255, 120]],
+    ],
+    "cinematic-plus": [
+      [0.0, [68, 112, 255]],
+      [0.18, [212, 78, 255]],
+      [0.36, [255, 86, 128]],
+      [0.55, [255, 168, 72]],
+      [0.76, [98, 236, 124]],
+      [1.0, [255, 252, 134]],
+    ],
+  };
+  
+  const PRESET_BACKGROUND = {
+    cinematic: { core: [9, 16, 26], aura: [28, 44, 72], vignette: [2, 4, 8] },
+    scientific: { core: [9, 13, 20], aura: [22, 38, 60], vignette: [2, 3, 6] },
+    neon: { core: [11, 12, 26], aura: [44, 25, 73], vignette: [3, 3, 9] },
+    "cinematic-plus": { core: [8, 12, 24], aura: [36, 52, 86], vignette: [2, 3, 7] },
+  };
+  
+  const PRESET_CONTROL_EXCLUSIONS = new Set([
+    "audio-file",
+    "palette-file",
+    "custom-preset-select",
+    "custom-preset-name",
+  ]);
+  
+  const windowHann = new Float32Array(FFT_SIZE);
+  for (let i = 0; i < FFT_SIZE; i += 1) {
+    windowHann[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (FFT_SIZE - 1)));
+  }
+  
+  const state = {
+    width: canvas.width,
+    height: canvas.height,
+    dpr: Math.max(1, window.devicePixelRatio || 1),
+    decodeContext: null,
+    currentAudioUrl: null,
+    map: null,
+    trail: [],
+    lastTrailIndex: -1,
+    lastPlaybackTime: 0,
+    lastFrameAt: performance.now(),
+    userYaw: 0,
+    userPitch: 0.2,
+    userZoom: 1,
+    userPanX: 0,
+    userPanY: 0,
+    autoYaw: 0,
+    autoPitch: 0,
+    autoZoom: 1,
+    dragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    drawerOpen: true,
+    activeTab: "session",
+    stars: [],
+    trailVelocity: 0,
+    activationPulse: new Map(),
+    connectionPulse: new Map(),
+    customPaletteStops: null,
+    recording: null,
+    recordingAudioGraph: null,
+  };
+  
+  function clamp(value, minValue, maxValue) {
+    return Math.max(minValue, Math.min(maxValue, value));
+  }
+  
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+  
+  function mixColor(a, b, t) {
+    return {
+      r: Math.round(lerp(a.r, b.r, t)),
+      g: Math.round(lerp(a.g, b.g, t)),
+      b: Math.round(lerp(a.b, b.b, t)),
+    };
+  }
+  
+  function rgba(color, alpha) {
+    return `rgba(${Math.round(color.r)}, ${Math.round(color.g)}, ${Math.round(color.b)}, ${alpha})`;
+  }
+  
+  function shiftToInfra(color, amount) {
+    const t = clamp(amount, 0, 1);
+    return mixColor(color, { r: 255, g: 84, b: 32 }, t);
+  }
+  
+  function setSessionLabel(text, live = false) {
+    sessionState.textContent = text;
+    sessionState.classList.toggle("chip-live", live);
+  }
+  
+  function formatTrackCaption(filename) {
+    const base = filename.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
+    const maxLen = 56;
+    const shortName = base.length > maxLen ? `${base.slice(0, maxLen - 1)}...` : base;
+    return `Geometry of ${shortName || "your song"}`;
+  }
+  
+  function safeFilenameBase(input) {
+    const base = (input || "song-geometry")
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[^a-zA-Z0-9-_\s]/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .toLowerCase();
+  
+    return base || "song-geometry";
+  }
+  
+  function normalizeValue(range, value) {
+    const span = Math.max(EPSILON, range.max - range.min);
+    return clamp((value - range.min) / span, 0, 1);
+  }
+  
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    state.dpr = Math.max(window.devicePixelRatio || 1, 1);
+    state.width = Math.max(640, Math.floor(rect.width * state.dpr));
+    state.height = Math.max(360, Math.floor(rect.height * state.dpr));
+    canvas.width = state.width;
+    canvas.height = state.height;
+  }
+  
+  function createStars() {
+    const count = 220;
+    const stars = [];
+  
+    for (let i = 0; i < count; i += 1) {
+      stars.push({
+        x: Math.random(),
+        y: Math.random(),
+        depth: Math.random() * 0.85 + 0.15,
+        radius: Math.random() * 1.8 + 0.3,
+        alpha: Math.random() * 0.45 + 0.18,
+        twinkle: Math.random() * Math.PI * 2,
+      });
+    }
+  
+    state.stars = stars;
+  }
+
+  return {
+    canvas,
+    ctx,
+    stage,
+    fileInput,
+    fileLabel,
+    player,
+    playToggle,
+    pauseAudioBtn,
+    resetViewBtn,
+    sessionState,
+    trackCaption,
+    drawerToggle,
+    controlDrawer,
+    tabButtons,
+    mappingMode,
+    cameraPreset,
+    dragMode,
+    edgeMode,
+    edgeStyle,
+    displayDecimation,
+    knnNeighbors,
+    knnBoost,
+    freqSpread,
+    pointScale,
+    pointOpacity,
+    pointDepth,
+    edgeOpacity,
+    edgeSolidness,
+    edgeTrailLength,
+    edgeTailFade,
+    trailPersistence,
+    trailFlare,
+    flowDensity,
+    pulseStrength,
+    nodeHitPulse,
+    motionStrength,
+    motionBlur,
+    rotationSpeed,
+    visualPreset,
+    customPresetSelect,
+    customPresetName,
+    saveCustomPresetBtn,
+    deleteCustomPresetBtn,
+    bloomStrength,
+    glowIntensity,
+    glowThreshold,
+    glowShift,
+    glowDecay,
+    fogStrength,
+    colorMetric,
+    paletteFile,
+    clearPaletteBtn,
+    exportMode,
+    showConnections,
+    showLabels,
+    cinemaMode,
+    captureStillBtn,
+    exportAnalysisJsonBtn,
+    export3dObjBtn,
+    startRecordingBtn,
+    stopRecordingBtn,
+    legendTitle,
+    legendBar,
+    legendScale,
+    helpBtn,
+    helpModal,
+    closeHelpBtn,
+    nodesOnly,
+    voiceStem,
+    offsetX,
+    offsetY,
+    offsetZ,
+    valOffsetX,
+    valOffsetY,
+    valOffsetZ,
+    metricRms,
+    metricCentroid,
+    metricSpread,
+    VOICE_API_BASE,
+    VOICE_API_ANALYZE_URL,
+    FFT_SIZE,
+    HOP_SIZE,
+    MAX_POINTS,
+    MAX_KNN_EDGES,
+    EPSILON,
+    CUSTOM_PRESETS_KEY,
+    PRESET_PALETTES,
+    PRESET_BACKGROUND,
+    PRESET_CONTROL_EXCLUSIONS,
+    windowHann,
+    state,
+    clamp,
+    lerp,
+    mixColor,
+    rgba,
+    shiftToInfra,
+    setSessionLabel,
+    formatTrackCaption,
+    safeFilenameBase,
+    normalizeValue,
+    resizeCanvas,
+    createStars,
+  };
+}

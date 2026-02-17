@@ -4,7 +4,7 @@ This document explains how Song Geometry Mapper computes descriptors, builds geo
 
 ## 1. Frame Extraction
 
-### Browser classic analyzer (`web/app.js`)
+### Browser classic analyzer (`web/app/analysis-module.js`)
 
 Constants:
 - `FFT_SIZE = 1024`
@@ -83,7 +83,7 @@ Where each `*N` is min-max normalized over the track.
 
 ## 4. Node Mapping Equations
 
-Implemented in `applyMapping` (`web/app.js`).
+Implemented in `applyMapping` (`web/app/analysis-module.js`).
 
 Let `tNorm = i / (N-1)`.
 
@@ -152,8 +152,10 @@ kNN (`build_knn_edges`):
 
 In wave style (`drawEdges`):
 - phase uses playback time: `player.currentTime`
+- playback time is mapped onto analysis frame timestamps (`t`) with nearest-frame/binary-search lookup
 - wave endpoint pinning uses envelope `sin(pi*t)`
 - local wave frequency from edge descriptors blended with active playback frame frequency factor
+- active playback frame factor is interpolated between adjacent frames for smoother, tighter sync
 - this keeps wave motion aligned with currently playing song region
 
 ## 8. Camera Projection and Visibility
@@ -173,11 +175,12 @@ In wave style (`drawEdges`):
 ### OBJ export (visible graph)
 - exports current visible nodes and visible edges
 - respects decimation, edge mode, visibility toggles, frustum culling
+- temporal edge export connects consecutive visible nodes so line endpoints always match exported node positions
 - writes `v` (vertices), `p` (points), `l` (lines)
 
 ## 10. Voice / Deep Mode Notes
 
-Voice mode in UI assumes external feature generation.
+Primary path uses local API (`python -m bgm.web_api`) to generate features from uploaded audio.
 
 Supported input JSON formats:
 1. raw feature frame array
@@ -188,3 +191,9 @@ Import behavior:
 - otherwise: recompute positions with current mapping mode
 - if edge arrays are included and valid: use them
 - otherwise: rebuild temporal and kNN edges
+
+## Source Locations
+
+- analysis math + mapping: `web/app/analysis-module.js`
+- rendering and connection drawing: `web/app/render-module.js`
+- import/export payload handling: `web/app/workflow-module.js`

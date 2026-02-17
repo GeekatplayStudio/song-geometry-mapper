@@ -12,9 +12,21 @@ It can analyze audio in-browser or load backend-generated features for playback-
 - Fast iteration, no external pipeline required.
 
 ### 2. Voice / Deep (Backend)
-- Load `features.json` generated externally (typically Python analyzer).
-- Load matching audio for playback sync.
-- Useful for stem-focused visualizations (vocals, drums, bass, other).
+- Upload one audio file.
+- Local voice backend (`bgm.web_api`) runs analyzer automatically and returns JSON payload.
+- Web app auto-loads generated geometry and binds playback from the same file.
+- `Voice Focus` lets you request a stem target (`vocals`, `drums`, `bass`, `other`, or full mix).
+- Manual `features.json` loading is still supported.
+
+## Code Structure
+
+- `app.js`: thin entry module that wires runtime, modules, and UI events.
+- `app/runtime.js`: DOM/runtime setup, shared constants, and base utility helpers.
+- `app/analysis-module.js`: audio analysis, mapping math, palettes, and preset workflows.
+- `app/render-module.js`: camera, projection, and all rendering/drawing passes.
+- `app/workflow-module.js`: imports/exports, playback workflows, voice API bridge, and recording.
+- `visual_utils.js`: pure visual helper utilities.
+- `preset_utils.js`: pure preset utility helpers.
 
 ## Core Rendering Features
 
@@ -62,7 +74,7 @@ From `Post FX & Export`:
 
 From repo root:
 ```bash
-docker compose up web
+docker compose up web voice-api
 ```
 
 Open:
@@ -72,8 +84,7 @@ Open:
 
 From repo root:
 ```bash
-cd web
-python3 -m http.server 5173
+./start_web.sh
 ```
 
 Open:
@@ -90,7 +101,7 @@ node --test web/tests/*.test.js
 1. Choose `Classic` or `Voice / Deep` mode.
 2. Load source data:
    - Classic: audio
-   - Voice/Deep: `features.json` plus audio
+   - Voice/Deep: single audio upload (backend auto-analysis)
 3. Wait for `Ready`.
 4. Press `Play`.
 5. Tune mapping/visual/FX controls.
@@ -101,3 +112,4 @@ node --test web/tests/*.test.js
 - front page: `../README.md`
 - installation: `../docs/INSTALL.md`
 - algorithms: `../docs/ALGORITHMS.md`
+- license: `../LICENSE`
