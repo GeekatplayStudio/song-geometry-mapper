@@ -2,48 +2,67 @@
 
 ## 1. Product Summary
 
-Song Geometry Mapper is a local-first toolchain by Geekatplay Studio that converts an audio recording into a 3D geometric visualization of frame-by-frame spectral behavior. It pairs deterministic Python analysis outputs with interactive web and TouchDesigner scenes.
+Song Geometry Mapper is a local-first toolchain that converts audio into a 3D geometric representation of frame-wise spectral behavior.
+
+It includes:
+- Python analyzer for reproducible feature extraction
+- Web viewer for interactive playback-synced rendering and export
+- TouchDesigner handoff path for advanced scene pipelines
 
 ## 2. Problem Statement
 
-Creative coders, educators, and researchers can analyze audio numerically but often lack an intuitive visual representation of how timbre and spectral structure evolve over time. Existing workflows are fragmented and frequently non-reproducible.
+Audio analysis data is typically numerical and hard to interpret visually over full-track timescales. Artists and researchers need a deterministic way to transform time-varying timbre into explorable spatial structure.
 
-## 3. Goals (MVP)
+## 3. Product Goals
 
-- Import WAV, MP3, and FLAC audio files.
-- Generate per-frame descriptors as `features.csv` and `features.json`.
-- Provide metadata and range summaries for visualization normalization.
-- Visualize data in TouchDesigner as a 3D point cloud with optional edges.
-- Provide a spectral spread legend labeled in kHz.
-- Support local isolated execution on macOS and Windows.
+- Analyze WAV/MP3/FLAC into frame descriptors.
+- Support both full mix and stem-focused analysis.
+- Provide browser-native and backend-driven visualization modes.
+- Preserve deterministic outputs for same inputs/settings.
+- Export data and media for downstream tools.
 
-## 4. Non-goals (MVP)
+## 4. Non-goals
 
-- No species classification or labeling.
-- No cloud processing or hosted backend.
-- No proprietary style replication.
-- No guaranteed real-time live microphone mode.
+- No cloud dependency.
+- No classification/genre/species labeling model.
+- No real-time live microphone guarantee.
+- No proprietary style cloning.
 
 ## 5. Target Users
 
-- Creative coders / TouchDesigner artists.
-- Media arts educators and students.
-- Audio visualization researchers.
+- Creative coders and audiovisual artists
+- Educators and students in DSP/media arts
+- Researchers exploring timbral structure over time
 
-## 6. User Journey
+## 6. User Journeys
 
-1. User places an audio file in a local folder.
-2. User runs analyzer CLI to produce feature outputs.
-3. User opens TouchDesigner project and points it to `features.csv`.
-4. User adjusts axis mapping, color, size, decimation, and edge mode.
-5. User exports stills/video.
+### Journey A: Fast Browser Analysis
+
+1. User opens web app.
+2. User chooses `Classic (Browser)` mode.
+3. User drops audio file.
+4. User explores geometry, links, and playback-reactive effects.
+5. User exports PNG/WebM/JSON/OBJ.
+
+### Journey B: Backend/Stem Workflow
+
+1. User runs Python analyzer (optional `--separate`).
+2. User opens web app and chooses `Voice / Deep (Backend)`.
+3. User loads analyzer `features.json` and matching audio.
+4. User explores stem-specific geometry and exports.
+
+### Journey C: TouchDesigner Pipeline
+
+1. User runs analyzer and creates `features.csv` (+ optional `edges.csv`).
+2. User loads data into TouchDesigner graph.
+3. User builds final render stack and output.
 
 ## 7. Functional Requirements
 
-### 7.1 Python Analysis
+### 7.1 Python Analyzer
 
-- Configurable sample rate, FFT size, hop size, smoothing, and normalization.
-- Per-frame output columns:
+- Configurable SR/FFT/hop/smoothing/normalization.
+- Required frame columns:
   - `t_seconds`
   - `rms`
   - `spectral_centroid_hz`
@@ -54,37 +73,49 @@ Creative coders, educators, and researchers can analyze audio numerically but of
   - `zcr`
   - `peak_hz`
   - `frame_index`
-- Validation: required columns, no NaNs, monotonic time/index.
-- Optional edge export:
-  - Temporal (`i -> i+1`)
-  - kNN (`i, j, weight`)
+- Validation: required columns, no NaN, monotonic time/index.
+- Optional edges: temporal and kNN.
+- Optional stem separation via Demucs.
 
-### 7.2 Visualization (TouchDesigner)
+### 7.2 Web Viewer
 
-- Load `features.csv` (single source of truth).
-- Render instanced points in 3D.
-- Default mapping:
-  - X = `t_seconds`
-  - Y = `peak_hz`
-  - Z = `spectral_spread_hz`
-  - Size = `rms`
-  - Color = `spectral_spread_khz`
-- UI controls for axis source/scale, decimation, edge mode, and visual style.
-- Sci-fi style pass with trails, bloom, DOF, and fog.
+- Two analysis ingestion modes:
+  - `Classic (Browser)` audio analysis
+  - `Voice / Deep (Backend)` JSON + audio ingest
+- Mapping modes:
+  - `Manifold (PCA)`
+  - `Time Spine`
+- Connectivity:
+  - temporal edges
+  - kNN edges
+  - styles: `Wave` and `Straight`
+- Visual controls:
+  - camera, glow, fog, pulse, trail, decimation, labels
+- Exports:
+  - analysis JSON
+  - PNG still
+  - WebM recording
+  - visible graph OBJ
+
+### 7.3 TouchDesigner Path
+
+- Data contract compatibility with analyzer outputs.
+- Configurable 3D instancing and optional edge rendering.
+- Legend and post FX alignment with descriptor ranges.
 
 ## 8. Non-functional Requirements
 
-- Runs fully local on macOS and Windows.
-- No global Python dependency required when using Docker workflow.
-- Handles at least 10 minutes of audio with decimation available for interactivity.
+- Fully local operation on macOS and Windows.
+- Docker-first reproducibility, local venv fallback.
+- Handle long tracks with decimation/performance controls.
 
 ## 9. Success Criteria
 
-- Analyzer produces valid outputs for supported formats.
-- Tests pass in isolated environment.
-- TouchDesigner setup reproducibly renders point cloud and legend.
-- End users can export still/video outputs without external services.
+- Analyzer outputs valid deterministic descriptors.
+- Browser and backend modes both render and sync correctly.
+- Export formats open successfully in downstream tools.
+- Core tests pass in CI/local runs.
 
 ## 10. Release Scope
 
-MVP release includes Python package, tests, Docker/local setup, TouchDesigner setup instructions, and documentation.
+Current scope includes Python analyzer, script-based setup, web viewer with exports, docs, and TouchDesigner integration path.

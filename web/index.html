@@ -43,25 +43,32 @@
           <div class="help-body">
             <h3>How it works</h3>
             <p>
-              This application analyzes audio signals to create a 3D geometric representation of your song. 
-              It breaks the audio into small time segments and extracts spectral features (frequency content) for each segment.
+              Song Geometry Mapper converts an audio track into frame-wise spectral descriptors and maps those frames into a 3D structure.
+              Each node is one time slice of the song.
             </p>
             <h3>The 3D Construction</h3>
             <p>
-              <strong>Analysis:</strong> The audio is processed using Fast Fourier Transform (FFT) to determine the energy at different frequencies.
+              <strong>Analysis:</strong> We extract RMS, centroid, spread, rolloff, flatness, peak frequency, zero-crossing rate, and flux per frame.
             </p>
             <p>
-              <strong>Mapping:</strong> We use dimensionality reduction (like PCA or t-SNE concepts) to map these high-dimensional frequency features into 3D space (X, Y, Z). 
-              Segments that sound similar will appear closer together in space, forming clusters and structures that represent the "shape" of the song's timbre.
+              <strong>Mapping:</strong> Choose <em>Manifold (PCA)</em> for structure-based clusters or <em>Time Spine</em> for chronological geometry.
+              Similar sounding regions become spatially closer in manifold mode.
+            </p>
+            <h3>Analyzer Modes</h3>
+            <p>
+              <strong>Classic (Browser):</strong> drop audio and analyze locally in the browser.
+              <br />
+              <strong>Voice / Deep (Backend):</strong> load precomputed <code>features.json</code> (for example from stem analysis) and load matching audio for playback sync.
             </p>
             <h3>Controls</h3>
             <ul>
               <li><strong>Mapping Mode:</strong> Switch between structural (Manifold) and chronological (Time Spine) views.</li>
-              <li><strong>Refine Geometry:</strong> Adjust the X/Y/Z position of the point cloud.</li>
+              <li><strong>Connections:</strong> Use temporal and similarity links, with straight or wave style.</li>
+              <li><strong>Refine Geometry:</strong> Adjust spread and X/Y/Z offsets of the point cloud.</li>
               <li><strong>Visibility:</strong> Use "Nodes Only" to hide edges and effects for a cleaner view.</li>
             </ul>
              <p style="margin-top: 2rem; font-size: 0.85rem; opacity: 0.7;">
-                Created by <strong>Geekatplay Studio</strong>. Designed for visualizing complex audio structures in real-time.
+                Created by <strong>Geekatplay Studio</strong>. See repository docs for full math, setup, and research references.
             </p>
           </div>
         </div>
@@ -373,6 +380,7 @@
             </label>
             <div class="button-row export-row">
               <button id="export-analysis-json" class="btn" type="button">Export Analysis JSON</button>
+              <button id="export-3d-obj" class="btn" type="button">Export 3D OBJ</button>
               <button id="capture-still" class="btn" type="button">Capture Still</button>
               <button id="start-recording" class="btn" type="button">Start Video</button>
               <button id="stop-recording" class="btn" type="button" disabled>Stop Video</button>

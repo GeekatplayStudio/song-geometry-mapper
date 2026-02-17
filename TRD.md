@@ -2,36 +2,43 @@
 
 ## 1. Architecture Overview
 
-The system has two primary local components:
+Primary local components:
 
-- Python analyzer (`python/bgm`) for deterministic feature extraction and export.
-- TouchDesigner project workflow (`touchdesigner/README.md`) for interactive rendering.
-- Web preview studio (`web/`) for fast visual iteration and local export.
+- Python analyzer (`python/bgm`) for deterministic descriptor extraction
+- Web viewer (`web/`) for interactive 3D rendering and export
+- TouchDesigner workflow (`touchdesigner/README.md`) for advanced scene construction
 
-Data flow:
+Data flow variants:
 
-1. Input audio file -> Python analyzer.
-2. Analyzer -> `features.csv`, `features.json`, `metadata.json`, optional `edges.csv`.
-3. TouchDesigner reads `features.csv` (+ optional `edges.csv`) and renders 3D scene.
+1. Classic browser path:
+- Audio -> browser descriptor extraction -> 3D mapping -> render/export
+
+2. Backend path:
+- Audio -> Python analyzer -> `features.json` -> web voice mode ingest -> render/export
+
+3. TouchDesigner path:
+- Audio -> Python analyzer -> `features.csv` (+ optional `edges.csv`) -> TouchDesigner
 
 ## 2. Python Technical Design
 
 ### 2.1 Modules
 
 - `bgm/features.py`
-  - Audio loading (mono, target SR).
-  - STFT magnitude generation.
-  - Frame descriptor extraction.
-  - Edge generation (temporal and kNN).
+  - audio loading (mono, target SR)
+  - STFT magnitude generation
+  - frame descriptor extraction
+  - temporal/kNN edge building
 - `bgm/normalize.py`
-  - `none`, `minmax`, `zscore` normalization.
-  - Moving-average smoothing.
+  - moving average smoothing
+  - `none`/`minmax`/`zscore` normalization
 - `bgm/schema.py`
-  - Required-column and integrity validation.
-  - Numeric column min/max summary.
+  - required-column and integrity validation
+  - numeric min/max summaries
+- `bgm/separate.py`
+  - Demucs stem separation orchestration
 - `bgm/analyze.py`
-  - CLI argument parsing and orchestration.
-  - Output writing and metadata assembly.
+  - CLI parsing and pipeline orchestration
+  - output writing and metadata assembly
 
 ### 2.2 CLI Contract
 
@@ -41,8 +48,7 @@ Command:
 python -m bgm.analyze --input <audio> --outdir <dir> [options]
 ```
 
-Supported options:
-
+Options:
 - `--sr`
 - `--n_fft`
 - `--hop`
@@ -51,11 +57,11 @@ Supported options:
 - `--edge-mode`
 - `--knn-n`
 - `--knn-columns`
+- `--separate` (if Demucs available)
 
 ### 2.3 Output Schemas
 
-`features.csv` and `features.json` rows include:
-
+`features.csv` and `features.json`:
 - `t_seconds`
 - `rms`
 - `spectral_centroid_hz`
@@ -67,77 +73,100 @@ Supported options:
 - `peak_hz`
 - `frame_index`
 
-`metadata.json` includes:
+`metadata.json`:
+- generation timestamp
+- input path
+- settings
+- audio summary (`sample_rate`, `duration_seconds`, etc.)
+- per-column min/max map
+- edge summary
 
-- Generation timestamp.
-- Input path and settings.
-- Audio summary (`sample_rate`, `duration_seconds`, `num_samples`, `num_frames`, etc.).
-- Per-column min/max map.
-- Edge output summary.
-
-Optional `edges.csv` includes:
-
+Optional `edges.csv`:
 - `i`
 - `j`
 - `weight`
 - `mode`
 
-## 3. Visualization Technical Design (TouchDesigner)
+## 3. Web Technical Design
 
-### 3.1 Data Ingestion
+Main implementation: `web/app.js`
 
-- `File In DAT` loads `features.csv`.
-- `DAT to CHOP` converts columns to channels.
-- CHOP network maps selected channels to instancing attributes.
+### 3.1 Ingestion Modes
 
-### 3.2 Scene
+- `Classic (Browser)`
+  - decodes audio in browser
+  - computes descriptors and mapping locally
 
-- Instanced spheres or points as primary geometry.
-- Optional edges from `edges.csv` (temporal or kNN).
-- Camera orbit and reset control.
+- `Voice / Deep (Backend)`
+  - loads precomputed JSON descriptors
+  - optionally preserves precomputed positions/edges
+  - uses audio element for playback synchronization
 
-### 3.3 Visual Pipeline
+### 3.2 Geometry and Rendering
 
-- Gradient mapping from `spectral_spread_khz`.
-- Legend panel with title `Spectral Spread (kHz)`.
-- Motion/displacement driven by audio-derived channels.
-- TOP feedback trails.
-- Post FX: bloom, fog, depth-of-field, color grade.
+- descriptor normalization and frame feature vectors
+- mapping modes:
+  - PCA manifold projection
+  - time spine weighted projection
+- edge systems:
+  - temporal
+  - kNN similarity
+- connection styles:
+  - straight
+  - playback-synced wave
 
-## 4. Testing Strategy
+### 3.3 Exports
+
+- analysis JSON
+- PNG still
+- WebM recording
+- visible 3D graph OBJ
+
+## 4. TouchDesigner Integration
+
+- `features.csv` is the baseline ingest format.
+- optional `edges.csv` for temporal/similarity lines.
+- channel mapping and visual logic defined in `touchdesigner/README.md`.
+
+## 5. Testing Strategy
 
 Automated tests validate:
+- schema integrity and error handling
+- normalization/smoothing behavior
+- edge generation behavior
+- analyzer output generation
+- web utility logic
 
-- Schema integrity and failure cases.
-- Normalization and smoothing behavior.
-- Edge generation correctness.
-- End-to-end analyzer output creation.
-- Metadata consistency.
-- Deterministic output for identical inputs/settings.
+Commands:
 
-Execution path:
+```bash
+# Python
+cd python
+python -m pytest -q
 
-- Preferred isolated run: `docker compose run --rm test`.
+# Web
+node --test web/tests/*.test.js
+```
 
-## 5. Environment and Isolation
+## 6. Environment and Isolation
 
-### 5.1 Docker
+### 6.1 Docker
 
-- `python/Dockerfile` builds analyzer image with dependencies.
-- `docker-compose.yml` defines:
-  - `analyzer` service for CLI runs.
-  - `test` service for pytest.
+`docker-compose.yml` services:
+- `analyzer`
+- `test`
+- `web`
 
-### 5.2 Local venv fallback
+### 6.2 Local Fallback
 
-- Project-local `.venv` in `python/.venv`.
-- No global package installation required.
+- Python virtual env at `python/.venv`
+- static web served via `python3 -m http.server 5173`
 
-## 6. Risks and Mitigations
+## 7. Risks and Mitigations
 
-- Risk: Large audio can reduce interactivity in TD.
-  - Mitigation: decimation, reduced preview resolution, optional edges off.
-- Risk: kNN edge density can overwhelm scene.
-  - Mitigation: limit `knn_n`, expose UI toggles.
-- Risk: library/version differences across machines.
-  - Mitigation: Dockerized default workflow.
+- Large files reduce interactivity
+  - mitigation: decimation, edge toggles, performance control settings
+- Dense kNN links can clutter scenes
+  - mitigation: neighbor count and edge visibility controls
+- Platform/runtime differences
+  - mitigation: Docker-first setup and script-based fallback

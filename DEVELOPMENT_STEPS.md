@@ -2,45 +2,39 @@
 
 ## Phase 0 - Foundation (Completed)
 
-- [x] Create repository layout for Python, TouchDesigner, and assets.
-- [x] Implement analyzer package and CLI.
-- [x] Implement schema validation, normalization, and smoothing.
-- [x] Implement optional temporal and kNN edge export.
-- [x] Add baseline tests and Docker-isolated workflows.
+- [x] Repository layout for Python, web, TouchDesigner, and assets
+- [x] Analyzer package and CLI
+- [x] Schema validation, normalization, and smoothing
+- [x] Optional temporal and kNN edge export
+- [x] Baseline tests and Docker workflows
 
-## Phase 1 - MVP Hardening (Current)
+## Phase 1 - Product Core (Completed)
 
-- [x] Expand unit/integration test coverage.
-- [x] Add product and technical documentation (`PRD.md`, `TRD.md`).
-- [x] Add project development roadmap document.
-- [x] Rebrand to Geekatplay Studio / Song Geometry Mapper.
-- [x] Add GitHub-ready installation and development docs (`docs/`).
-- [ ] Add CI workflow to run Docker-based test command automatically.
-- [ ] Pin dependency versions for stricter reproducibility (optional).
+- [x] Script-based setup for macOS/Linux and Windows
+- [x] Browser web viewer with interactive controls
+- [x] Mapping modes: Manifold (PCA) and Time Spine
+- [x] Temporal + kNN connection rendering
+- [x] JSON export and import support
 
-## Phase 2 - Advanced Features (New)
+## Phase 2 - Advanced Features (Completed)
 
-- [x] Web Preview: Add Wave/Straight connection toggle.
-- [x] Analyzer: Add audio stem separation (Demucs) integration.
-- [ ] Web Preview: Advanced camera path editor.
+- [x] Wave/Straight connection style toggle
+- [x] Stem separation integration (Demucs)
+- [x] Voice/Deep backend ingestion mode in web UI
+- [x] 3D OBJ export of visible graph (nodes + links)
 
+## Phase 3 - Documentation and Reliability (Completed)
 
-## Phase 2 - TouchDesigner Build Completion
+- [x] Front-page README rewrite for GitHub
+- [x] Installation and development documentation overhaul
+- [x] Algorithm and research reference documentation
+- [x] In-app Help modal update to match current functionality
+- [x] Mac web startup fallback when Docker daemon is unavailable
 
-- [ ] Build final `.toe` network from `touchdesigner/README.md` steps.
-- [ ] Implement configurable UI controls exactly as listed.
-- [ ] Validate legend scale against data min/max in live scene.
-- [ ] Validate temporal and kNN edge rendering modes.
-- [ ] Capture and store example screenshots in `assets/screenshots/`.
+## Phase 4 - Remaining Roadmap
 
-## Phase 3 - Visual Polish
-
-- [ ] Tune sci-fi gradient presets and post-processing stack.
-- [ ] Calibrate trail feedback parameters for different audio genres.
-- [ ] Add performance presets (preview vs high-quality export).
-
-## Phase 4 - Release Packaging
-
-- [ ] Add explicit open-source license file.
-- [ ] Finalize root README with screenshots and known limitations.
-- [ ] Create tagged release notes with tested environment matrix.
+- [ ] CI workflow to run analyzer and web tests automatically
+- [ ] Optional dependency/version pin hardening for stricter reproducibility
+- [ ] Final TouchDesigner `.toe` build completion and screenshot pack
+- [ ] Performance presets for large tracks
+- [ ] Add explicit open-source license file

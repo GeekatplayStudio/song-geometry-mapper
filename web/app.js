@@ -72,6 +72,7 @@ const cinemaMode = document.getElementById("cinema-mode");
 
 const captureStillBtn = document.getElementById("capture-still");
 const exportAnalysisJsonBtn = document.getElementById("export-analysis-json");
+const export3dObjBtn = document.getElementById("export-3d-obj");
 const startRecordingBtn = document.getElementById("start-recording");
 const stopRecordingBtn = document.getElementById("stop-recording");
 
@@ -1247,6 +1248,29 @@ function activityForIndex(index, activeIndex, width) {
   return Math.exp(-(x * x) * 1.48);
 }
 
+function liveFrequencyFactor(frame) {
+  if (!frame) {
+    return 0;
+  }
+
+  return clamp(frame.peakN * 0.74 + frame.centroidN * 0.26, 0, 1);
+}
+
+function edgeFrequencyFactor(frameA, frameB, activeFrame, edgeActivity) {
+  const base =
+    frameA && frameB
+      ? clamp((frameA.peakN + frameB.peakN + frameA.centroidN + frameB.centroidN) * 0.25, 0, 1)
+      : 0;
+
+  if (!activeFrame) {
+    return base;
+  }
+
+  const live = liveFrequencyFactor(activeFrame);
+  const syncMix = clamp(edgeActivity * 1.4, 0, 1);
+  return lerp(base, live, syncMix);
+}
+
 function sampleFrameAt(indexFloat) {
   if (!state.map || state.map.frames.length === 0) {
     return null;
@@ -1427,7 +1451,7 @@ function updateCameraMotion(nowSec, dtMs) {
   }
 }
 
-function projectPoint3D(x, y, z, nowSec, activity = 0) {
+function computeViewSpacePoint(x, y, z, nowSec, activity = 0) {
   const spreadScale = Number(freqSpread.value);
   const motion = Number(motionStrength.value) * 0.24;
 
@@ -1456,21 +1480,31 @@ function projectPoint3D(x, y, z, nowSec, activity = 0) {
   const zPitch = py * sinP + zYaw * cosP;
 
   const zoom = clamp(state.userZoom * state.autoZoom, 0.55, 2.2);
-  const focal = Math.min(state.width, state.height) * 0.96;
   const cameraDistance = 24 / zoom;
   const depth = cameraDistance - zPitch;
 
-  if (depth < 0.9) {
+  return {
+    x: xYaw,
+    y: yPitch,
+    z: zPitch,
+    depth,
+  };
+}
+
+function projectPoint3D(x, y, z, nowSec, activity = 0) {
+  const view = computeViewSpacePoint(x, y, z, nowSec, activity);
+  if (!view || view.depth < 0.9) {
     return null;
   }
 
-  const perspective = focal / depth;
+  const focal = Math.min(state.width, state.height) * 0.96;
+  const perspective = focal / view.depth;
   return {
-    x: state.width * (0.53 + state.userPanX) + xYaw * perspective,
-    y: state.height * (0.54 + state.userPanY) + yPitch * perspective,
-    depth,
+    x: state.width * (0.53 + state.userPanX) + view.x * perspective,
+    y: state.height * (0.54 + state.userPanY) + view.y * perspective,
+    depth: view.depth,
     perspective,
-    fog: clamp((depth - 6) / 26, 0, 1),
+    fog: clamp((view.depth - 6) / 26, 0, 1),
   };
 }
 
@@ -1716,6 +1750,9 @@ function drawEdges(byIndex, activeIndex, nowSec) {
   const cinemaBoost = cinemaMode.checked ? 1.15 : 0.72;
   const glowShiftAmt = Number(glowShift.value);
   const idleVisibility = activeIndex < 0 ? 0.52 : 1;
+  const playbackTime = !player.paused ? player.currentTime : nowSec;
+  const liveFrame = activeIndex >= 0 ? state.map.frames[activeIndex] : null;
+  const useWave = edgeStyle?.value === "wave";
 
   const registerConnectionPulse = (index, amount) => {
     if (index < 0) {
@@ -1726,12 +1763,14 @@ function drawEdges(byIndex, activeIndex, nowSec) {
   };
 
   const drawCometSegmentWave = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB, freqFactor) => {
-    const phase = (nowSec * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
+    const phase = (playbackTime * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
     const lenRatio = clamp(trailLength * (0.45 + activity * 0.9), 0.16, 1);
     const t1 = phase;
     const t0 = Math.max(0, t1 - lenRatio);
 
-    if (t1 <= 0.001) return;
+    if (t1 <= 0.001) {
+      return;
+    }
 
     const dx = bx - ax;
     const dy = by - ay;
@@ -1742,53 +1781,46 @@ function drawEdges(byIndex, activeIndex, nowSec) {
     const px = -ny;
     const py = nx;
 
-    // Wave properties based on frequency factor (0-1)
-    const waveFreq = 1.5 + freqFactor * 8.0; 
-    const waveAmp = Math.min(dist * 0.15, 3.5 + activity * 4.0);
-    const waveSpeed = 1.2 + Number(motionStrength.value) * 1.5;
-    
-    // Draw function helper
+    // Wave properties are synced to current playback frequency.
+    const waveFreq = 1.1 + freqFactor * 9.5;
+    const waveAmp = Math.min(dist * 0.14, (1.25 + freqFactor * 3.9) * (0.42 + activity * 1.15));
+    const waveSpeed = 0.55 + freqFactor * 2.2 + Number(motionStrength.value) * 0.55;
+
     const getWavePoint = (t) => {
-        const lx = ax + dx * t;
-        const ly = ay + dy * t;
-        // Envelope: tapered sine window sin(t*PI) to pin ends
-        const envelope = Math.sin(t * Math.PI);
-        const angle = t * Math.PI * 2 * waveFreq + (nowSec * waveSpeed); // Animated wave
-        const offset = Math.sin(angle) * waveAmp * envelope;
-        return {
-            x: lx + px * offset,
-            y: ly + py * offset
-        };
+      const lx = ax + dx * t;
+      const ly = ay + dy * t;
+      // Envelope pins wave exactly at both nodes.
+      const envelope = Math.sin(t * Math.PI);
+      const angle = t * Math.PI * 2 * waveFreq + playbackTime * waveSpeed * Math.PI * 2;
+      const offset = Math.sin(angle) * waveAmp * envelope;
+      return {
+        x: lx + px * offset,
+        y: ly + py * offset,
+      };
     };
 
     const tailColor = shiftToInfra(color, clamp(glowShiftAmt * (0.22 + (1 - activity) * 0.5), 0, 1));
     const backboneAlpha = clamp(alpha * (0.08 + solidness * (0.62 + tailFade * 0.16)), 0.006, 0.56);
-    
-    // Draw full wave backbone
+
+    // Draw full wave backbone.
     ctx.strokeStyle = rgba(tailColor, backboneAlpha.toFixed(3));
     ctx.lineWidth = Math.max(0.24, 0.34 + width * (0.16 + solidness * 0.08));
     ctx.beginPath();
     const steps = Math.max(12, Math.floor(dist / 3));
     for (let i = 0; i <= steps; i++) {
-        const p = getWavePoint(i / steps);
-        if (i === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
+      const p = getWavePoint(i / steps);
+      if (i === 0) {
+        ctx.moveTo(p.x, p.y);
+      } else {
+        ctx.lineTo(p.x, p.y);
+      }
     }
     ctx.stroke();
 
-    // Draw active comet segment
-    // Using gradient along the wave path is tricky with native canvas gradient (which is linear/radial)
-    // We can approximate by taking start/end of the *straight* segment for the gradient vector
-    const pStart = getWavePoint(t0);
-    const pEnd = getWavePoint(t1);
-    
-    // Linear gradient roughly follows the flow, though not perfectly along the curve
-    const x0 = lerp(ax, bx, t0);
-    const y0 = lerp(ay, by, t0);
-    const x1 = lerp(ax, bx, t1);
-    const y1 = lerp(ay, by, t1);
-    
-    const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+    // Draw active comet segment.
+    const startWave = getWavePoint(t0);
+    const endWave = getWavePoint(t1);
+    const grad = ctx.createLinearGradient(startWave.x, startWave.y, endWave.x, endWave.y);
     const particleMix = clamp(1.08 - solidness * 0.86, 0.16, 1.08);
     grad.addColorStop(0, rgba(tailColor, clamp(alpha * (0.06 + tailFade * 0.1) * particleMix, 0.004, 0.22).toFixed(3)));
     grad.addColorStop(0.55, rgba(color, clamp(alpha * (0.22 + tailFade * 0.24) * particleMix, 0.008, 0.56).toFixed(3)));
@@ -1796,18 +1828,21 @@ function drawEdges(byIndex, activeIndex, nowSec) {
 
     ctx.strokeStyle = grad;
     ctx.lineWidth = Math.max(0.32, width * (0.86 - solidness * 0.34));
-    
     ctx.beginPath();
-    // Only draw the segment [t0, t1]
+
+    // Draw only the active [t0, t1] section.
     const subSteps = Math.ceil(steps * (t1 - t0));
     const safeSubSteps = Math.max(4, subSteps);
-    
+
     for (let i = 0; i <= safeSubSteps; i++) {
-        const localT = i / safeSubSteps; // 0 to 1
-        const t = t0 + localT * (t1 - t0); // t0 to t1
-        const p = getWavePoint(t);
-        if (i === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
+      const localT = i / safeSubSteps;
+      const t = t0 + localT * (t1 - t0);
+      const p = getWavePoint(t);
+      if (i === 0) {
+        ctx.moveTo(p.x, p.y);
+      } else {
+        ctx.lineTo(p.x, p.y);
+      }
     }
     ctx.stroke();
 
@@ -1820,7 +1855,7 @@ function drawEdges(byIndex, activeIndex, nowSec) {
   };
 
   const drawCometSegmentLine = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB) => {
-    const phase = (nowSec * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
+    const phase = (playbackTime * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
     const len = clamp(trailLength * (0.45 + activity * 0.9), 0.16, 1);
     const t1 = phase;
     const t0 = Math.max(0, t1 - len);
@@ -1866,7 +1901,7 @@ function drawEdges(byIndex, activeIndex, nowSec) {
   };
 
   const drawCometSegmentCurve = (a, b, cx, cy, color, alpha, width, phaseSeed, activity, edgeA, edgeB) => {
-    const phase = (nowSec * (0.62 + Number(motionStrength.value) * 0.22) + phaseSeed) % 1;
+    const phase = (playbackTime * (0.62 + Number(motionStrength.value) * 0.22) + phaseSeed) % 1;
     const len = clamp(trailLength * (0.42 + activity * 0.95), 0.14, 1);
     const t1 = phase;
     const t0 = Math.max(0, t1 - len);
@@ -1941,13 +1976,30 @@ function drawEdges(byIndex, activeIndex, nowSec) {
 
       const alpha = clamp((0.04 + activity * 0.42) * edgeStrength * cinemaBoost * idleVisibility, 0.01, 0.74);
       const width = 0.52 + activity * 2.25;
-      const curve = (0.08 + Number(motionStrength.value) * 0.07 + activity * 0.28) * Math.sin(nowSec * 0.8 + edge.a * 0.02);
-
-      const cx = (a.x + b.x) * 0.5 + (b.y - a.y) * curve;
-      const cy = (a.y + b.y) * 0.5 - (b.x - a.x) * curve;
-
       const color = activity > 0.04 ? b.frame.color : { r: 105, g: 118, b: 138 };
-      drawCometSegmentCurve(a, b, cx, cy, color, alpha, width, edge.a * 0.019 + edge.b * 0.013, activity, edge.a, edge.b);
+      const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
+
+      if (useWave) {
+        drawCometSegmentWave(
+          a.x,
+          a.y,
+          b.x,
+          b.y,
+          color,
+          alpha,
+          width,
+          edge.a * 0.019 + edge.b * 0.013,
+          activity,
+          edge.a,
+          edge.b,
+          freqFactor,
+        );
+      } else {
+        const curve = (0.08 + Number(motionStrength.value) * 0.07 + activity * 0.28) * Math.sin(playbackTime * 0.8 + edge.a * 0.02);
+        const cx = (a.x + b.x) * 0.5 + (b.y - a.y) * curve;
+        const cy = (a.y + b.y) * 0.5 - (b.x - a.x) * curve;
+        drawCometSegmentCurve(a, b, cx, cy, color, alpha, width, edge.a * 0.019 + edge.b * 0.013, activity, edge.a, edge.b);
+      }
     }
   }
 
@@ -1973,15 +2025,37 @@ function drawEdges(byIndex, activeIndex, nowSec) {
         0.7,
       );
       const width = 0.5 + edge.weight * 1.42 * neighborVisibility + activity * 1.2;
+      const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
 
-      // Use Wave drawing for connections to represent frequency
-      const freqFactor = (a.frame.centroidN + b.frame.centroidN) * 0.5;
-      
-      if (edgeStyle && edgeStyle.value === "line") {
-        drawCometSegmentLine(a.x, a.y, b.x, b.y, b.frame.color, alpha, width, edge.a * 0.017 + edge.b * 0.021, activity, edge.a, edge.b);
+      if (!useWave) {
+        drawCometSegmentLine(
+          a.x,
+          a.y,
+          b.x,
+          b.y,
+          b.frame.color,
+          alpha,
+          width,
+          edge.a * 0.017 + edge.b * 0.021,
+          activity,
+          edge.a,
+          edge.b,
+        );
       } else {
-        // We pass the new helper instead of the line helper
-        drawCometSegmentWave(a.x, a.y, b.x, b.y, b.frame.color, alpha, width, edge.a * 0.017 + edge.b * 0.021, activity, edge.a, edge.b, freqFactor);
+        drawCometSegmentWave(
+          a.x,
+          a.y,
+          b.x,
+          b.y,
+          b.frame.color,
+          alpha,
+          width,
+          edge.a * 0.017 + edge.b * 0.021,
+          activity,
+          edge.a,
+          edge.b,
+          freqFactor,
+        );
       }
     }
   }
@@ -2090,11 +2164,8 @@ function drawPoints(projected, activeIndex, nowSec) {
     const pulsePhase = Math.sin(nowSec * 18 + item.index * 0.41) * 0.5 + 0.5;
     const pulseEnvelope = clamp((item.activity * 0.58 + item.pulse * 1.45 + item.connectionPulse * 1.25) * pulseControl, 0, 3.8);
     const pulseScale = 1 + pulseEnvelope * (0.16 + 0.28 * pulsePhase);
-    const vibrateAmp = item.radius * pulseEnvelope * (0.028 + item.frame.fluxN * 0.07);
-    const jitterX = Math.sin(nowSec * 52 + item.index * 1.91) * vibrateAmp;
-    const jitterY = Math.cos(nowSec * 47 + item.index * 1.37) * vibrateAmp;
-    const px = item.x + jitterX;
-    const py = item.y + jitterY;
+    const px = item.x;
+    const py = item.y;
     const radius = Math.max(0.55, item.radius * (0.74 + item.activity * 0.18) * pulseScale);
 
     const sphereGradient = ctx.createRadialGradient(
@@ -2139,9 +2210,8 @@ function drawPoints(projected, activeIndex, nowSec) {
 
     const pulsePhase = Math.sin(nowSec * 14 + item.index * 0.43) * 0.5 + 0.5;
     const pulseEnvelope = clamp((item.activity * 0.5 + item.pulse * 1.4) * pulseControl, 0, 3.2);
-    const vibrateAmp = item.radius * pulseEnvelope * (0.014 + item.frame.fluxN * 0.045);
-    const px = item.x + Math.sin(nowSec * 50 + item.index * 1.57) * vibrateAmp;
-    const py = item.y + Math.cos(nowSec * 45 + item.index * 1.29) * vibrateAmp;
+    const px = item.x;
+    const py = item.y;
     const glowPower = clamp(
       glowActivity * (0.3 + item.frame.rmsN * 0.86) * (0.42 + bloom * 0.52) * pointAlpha * glowGain * (0.8 + pulsePhase * 0.24),
       0.02,
@@ -2345,6 +2415,109 @@ function exportAnalysisJson() {
   setSessionLabel("Analysis Exported", !player.paused);
 }
 
+function buildVisibleGraphForObjExport(nowSec) {
+  if (!state.map) {
+    return null;
+  }
+
+  const decimate = Math.max(1, Number(displayDecimation.value));
+  const activeIndex = !player.paused ? getFrameIndexAtTime(player.currentTime) : -1;
+  const activityWindow = 6 + Number(flowDensity.value) * 18;
+
+  const vertices = [];
+  const vertexByFrameIndex = new Map();
+
+  for (let i = 0; i < state.map.frames.length; i += decimate) {
+    const frame = state.map.frames[i];
+    const pulse = state.activationPulse.get(i) || 0;
+    const activity = clamp(activityForIndex(i, activeIndex, activityWindow) + pulse * 1.15, 0, 2.2);
+    const view = computeViewSpacePoint(frame.x, frame.y, frame.z, nowSec, activity);
+    if (!view || view.depth < 0.9) {
+      continue;
+    }
+
+    const nextVertexIndex = vertices.length + 1;
+    vertices.push({
+      frameIndex: i,
+      x: view.x,
+      y: -view.y,
+      z: view.z,
+    });
+    vertexByFrameIndex.set(i, nextVertexIndex);
+  }
+
+  const edges = [];
+  if (!nodesOnly.checked && showConnections.checked) {
+    const mode = edgeMode.value;
+    const addEdge = (a, b) => {
+      const va = vertexByFrameIndex.get(a);
+      const vb = vertexByFrameIndex.get(b);
+      if (!va || !vb) {
+        return;
+      }
+      edges.push([va, vb]);
+    };
+
+    if (mode === "temporal" || mode === "both") {
+      const stride = Math.max(1, Number(displayDecimation.value));
+      for (let i = 0; i < state.map.temporalEdges.length; i += stride) {
+        const edge = state.map.temporalEdges[i];
+        addEdge(edge.a, edge.b);
+      }
+    }
+
+    if (mode === "knn" || mode === "both") {
+      const stride = state.map.knnEdges.length > 6200 ? 2 : 1;
+      for (let i = 0; i < state.map.knnEdges.length; i += stride) {
+        const edge = state.map.knnEdges[i];
+        addEdge(edge.a, edge.b);
+      }
+    }
+  }
+
+  return { vertices, edges };
+}
+
+function exportVisible3dObj() {
+  if (!state.map) {
+    setSessionLabel("No Analysis", false);
+    return;
+  }
+
+  const graph = buildVisibleGraphForObjExport(performance.now() * 0.001);
+  if (!graph || graph.vertices.length === 0) {
+    setSessionLabel("Nothing Visible", false);
+    return;
+  }
+
+  const lines = [];
+  lines.push("# Song Geometry Mapper - Visible 3D Graph");
+  lines.push(`# Exported at ${new Date().toISOString()}`);
+  lines.push(`o ${safeFilenameBase(fileLabel?.textContent || "song-geometry")}`);
+
+  for (const vertex of graph.vertices) {
+    lines.push(`v ${vertex.x.toFixed(6)} ${vertex.y.toFixed(6)} ${vertex.z.toFixed(6)}`);
+  }
+
+  lines.push("g nodes");
+  for (let i = 1; i <= graph.vertices.length; i += 1) {
+    lines.push(`p ${i}`);
+  }
+
+  if (graph.edges.length > 0) {
+    lines.push("g connections");
+    for (const [a, b] of graph.edges) {
+      lines.push(`l ${a} ${b}`);
+    }
+  }
+
+  const blob = new Blob([lines.join("\n") + "\n"], { type: "text/plain" });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const name = safeFilenameBase(fileLabel?.textContent || "song-geometry");
+  downloadBlob(blob, `${name}-visible-3d-${stamp}.obj`);
+  setSessionLabel(`3D OBJ ${graph.vertices.length}N ${graph.edges.length}E`, !player.paused);
+}
+
 async function loadAnalysisJson(file) {
   try {
     setSessionLabel("Loading JSON...", true);
@@ -2356,28 +2529,77 @@ async function loadAnalysisJson(file) {
       throw new Error("Invalid JSON file");
     }
 
-    if (!Array.isArray(rawData)) {
-      throw new Error("JSON must be an array of frame objects");
+    let payload = null;
+    let frameRows = null;
+
+    if (Array.isArray(rawData)) {
+      frameRows = rawData;
+    } else if (rawData && typeof rawData === "object" && Array.isArray(rawData.frames)) {
+      payload = rawData;
+      frameRows = rawData.frames;
+    } else {
+      throw new Error("JSON must be an array of frames or an exported analysis object");
     }
 
-    // Map Python keys to internal keys
-    const descriptors = rawData.map((d) => {
-      // Handle both Python snake_case and potential JS camelCase if re-importing
-      const t = d.t !== undefined ? d.t : (d.t_seconds || 0);
-      const rms = d.rms || 0;
-      const centroidHz = d.spectral_centroid_hz || d.centroidHz || 0;
-      const spreadHz = d.spectral_spread_hz || d.spreadHz || 0;
-      const rolloffHz = d.spectral_rolloff_hz || d.rolloffHz || 0;
-      const flatness = d.spectral_flatness || d.flatness || 0;
-      const zcr = d.zcr || 0;
-      const peakHz = d.peak_hz || d.peakHz || 0;
-      const flux = d.flux || 0; // Python might not have flux currently, default to 0
+    if (!Array.isArray(frameRows) || frameRows.length === 0) {
+      throw new Error("JSON contains no frame data");
+    }
 
-      return { t, rms, centroidHz, spreadHz, rolloffHz, flatness, zcr, peakHz, flux };
+    // Map Python keys, raw arrays, and exported analysis objects to internal keys.
+    const descriptors = frameRows.map((d, index) => {
+      const t = d.t !== undefined ? Number(d.t) : Number(d.t_seconds || 0);
+      const rms = Number(d.rms || 0);
+      const centroidHz = Number(d.spectral_centroid_hz || d.centroidHz || 0);
+      const spreadHz = Number(d.spectral_spread_hz || d.spreadHz || 0);
+      const rolloffHz = Number(d.spectral_rolloff_hz || d.rolloffHz || 0);
+      const flatness = Number(d.spectral_flatness || d.flatness || 0);
+      const zcr = Number(d.zcr || 0);
+      const peakHz = Number(d.peak_hz || d.peakHz || 0);
+      const flux = Number(d.flux || 0);
+
+      const x = Number(d.x);
+      const y = Number(d.y);
+      const z = Number(d.z);
+      const hasPosition = Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z);
+
+      let color = null;
+      if (d.color && typeof d.color === "object") {
+        const r = Number(d.color.r);
+        const g = Number(d.color.g);
+        const b = Number(d.color.b);
+        if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
+          color = {
+            r: clamp(Math.round(r), 0, 255),
+            g: clamp(Math.round(g), 0, 255),
+            b: clamp(Math.round(b), 0, 255),
+          };
+        }
+      }
+
+      return {
+        id: Number.isFinite(Number(d.id)) ? Math.trunc(Number(d.id)) : index,
+        t,
+        rms,
+        centroidHz,
+        spreadHz,
+        rolloffHz,
+        flatness,
+        zcr,
+        peakHz,
+        flux,
+        x,
+        y,
+        z,
+        hasPosition,
+        size: Number(d.size),
+        color,
+        label: typeof d.label === "string" ? d.label : "",
+      };
     });
 
     const ranges = computeRanges(descriptors);
     const frames = [];
+    const hasEmbeddedPositions = descriptors.every((d) => d.hasPosition);
 
     for (let i = 0; i < descriptors.length; i += 1) {
       const d = descriptors[i];
@@ -2392,7 +2614,7 @@ async function loadAnalysisJson(file) {
       const fluxN = normalizeValue(ranges.flux, d.flux);
 
       frames.push({
-        id: i,
+        id: d.id,
         t: d.t,
         rms: d.rms,
         rmsN,
@@ -2412,37 +2634,88 @@ async function loadAnalysisJson(file) {
         flux: d.flux,
         fluxN,
         featureVec: [centroidN, spreadN, rolloffN, flatnessN, zcrN, rmsN, peakN, fluxN],
-        x: 0,
-        y: 0,
-        z: 0,
-        size: 0.82 + Math.pow(rmsN, 0.68) * 4.8,
-        color: { r: 120, g: 170, b: 255 },
-        label: `${(d.peakHz / 1000).toFixed(2)}K`,
+        x: hasEmbeddedPositions ? d.x : 0,
+        y: hasEmbeddedPositions ? d.y : 0,
+        z: hasEmbeddedPositions ? d.z : 0,
+        size: Number.isFinite(d.size) && d.size > 0 ? d.size : 0.82 + Math.pow(rmsN, 0.68) * 4.8,
+        color: d.color || { r: 120, g: 170, b: 255 },
+        label: d.label || `${(d.peakHz / 1000).toFixed(2)}K`,
       });
     }
 
-    applyMapping(frames, mappingMode.value);
+    if (!hasEmbeddedPositions) {
+      applyMapping(frames, mappingMode.value);
+    }
 
-    const spreadRangeKhz = {
-      min: ranges.spreadHz.min / 1000,
-      max: ranges.spreadHz.max / 1000,
+    const payloadSpread = payload?.ranges?.spreadRangeKhz;
+    const payloadPeak = payload?.ranges?.peakRangeKhz;
+
+    const spreadRangeKhz =
+      payloadSpread && Number.isFinite(Number(payloadSpread.min)) && Number.isFinite(Number(payloadSpread.max))
+        ? {
+            min: Number(payloadSpread.min),
+            max: Number(payloadSpread.max),
+          }
+        : {
+            min: ranges.spreadHz.min / 1000,
+            max: ranges.spreadHz.max / 1000,
+          };
+
+    const peakRangeKhz =
+      payloadPeak && Number.isFinite(Number(payloadPeak.min)) && Number.isFinite(Number(payloadPeak.max))
+        ? {
+            min: Number(payloadPeak.min),
+            max: Number(payloadPeak.max),
+          }
+        : {
+            min: ranges.peakHz.min / 1000,
+            max: ranges.peakHz.max / 1000,
+          };
+
+    const normalizeEdges = (edges, fallbackWeight = 0.3) => {
+      if (!Array.isArray(edges)) {
+        return null;
+      }
+
+      const normalized = [];
+      for (const edge of edges) {
+        const a = Number(edge?.a);
+        const b = Number(edge?.b);
+        if (
+          !Number.isInteger(a) ||
+          !Number.isInteger(b) ||
+          a < 0 ||
+          b < 0 ||
+          a >= frames.length ||
+          b >= frames.length
+        ) {
+          continue;
+        }
+
+        const weight = Number(edge?.weight);
+        normalized.push({
+          a,
+          b,
+          weight: Number.isFinite(weight) ? weight : fallbackWeight,
+        });
+      }
+      return normalized;
     };
 
-    const peakRangeKhz = {
-      min: ranges.peakHz.min / 1000,
-      max: ranges.peakHz.max / 1000,
-    };
+    const temporalEdges = normalizeEdges(payload?.edges?.temporal, 0.36) || buildTemporalEdges(frames);
+    const knnEdges = normalizeEdges(payload?.edges?.knn, 0.22) || buildKnnEdges(frames, Number(knnNeighbors.value));
 
-    const temporalEdges = buildTemporalEdges(frames);
-    const knnEdges = buildKnnEdges(frames, Number(knnNeighbors.value));
-    
-    // Estimate duration if audio not present
+    // Estimate duration if audio is not present.
     const lastFrame = frames[frames.length - 1];
-    const duration = lastFrame ? lastFrame.t + (frames.length > 1 ? frames[1].t - frames[0].t : 0.02) : 0;
+    const estimatedDuration = lastFrame ? lastFrame.t + (frames.length > 1 ? frames[1].t - frames[0].t : 0.02) : 0;
+    const payloadDuration = Number(payload?.track?.durationSec);
+    const playerDuration = Number(player.duration);
+    const durationFromPlayer = Number.isFinite(playerDuration) && playerDuration > 0 ? playerDuration : null;
+    const durationFromPayload = Number.isFinite(payloadDuration) && payloadDuration > 0 ? payloadDuration : null;
 
     const map = {
       frames,
-      duration: state.map ? state.map.duration : duration, // Keep audio duration if available
+      duration: durationFromPlayer || durationFromPayload || estimatedDuration,
       spreadRangeKhz,
       peakRangeKhz,
       temporalEdges,
@@ -2463,7 +2736,9 @@ async function loadAnalysisJson(file) {
     state.lastTrailIndex = -1;
     state.activationPulse.clear();
 
-    trackCaption.textContent = "Analysis: " + file.name;
+    trackCaption.textContent = payload?.track?.name
+      ? formatTrackCaption(String(payload.track.name))
+      : "Analysis: " + file.name;
     fileLabel.textContent = file.name;
     setSessionLabel("Ready", false);
 
@@ -2907,6 +3182,7 @@ function bindEvents() {
 
   captureStillBtn.addEventListener("click", captureStill);
   exportAnalysisJsonBtn?.addEventListener("click", exportAnalysisJson);
+  export3dObjBtn?.addEventListener("click", exportVisible3dObj);
   startRecordingBtn.addEventListener("click", startRecording);
   stopRecordingBtn.addEventListener("click", stopRecording);
 

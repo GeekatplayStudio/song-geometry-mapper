@@ -1,159 +1,252 @@
 # Song Geometry Mapper
 
-**Geekatplay Studio** presents **Song Geometry Mapper**: a local-first toolkit that converts audio into frame-wise spectral descriptors and maps the full song into a cinematic 3D geometry.
+Song Geometry Mapper is a local-first audio analysis and 3D visualization toolkit by Geekatplay Studio.
 
-It includes:
-- A Python analyzer CLI (`features.csv`, `features.json`, `metadata.json`, optional `edges.csv`)
-- A premium local web preview (fullscreen 3D map, trails, connections, labels, export)
-- A TouchDesigner build recipe for production-grade visuals
+It turns a song into a time-indexed geometric structure:
+- nodes = short audio frames
+- node position = spectral behavior over time
+- node size/color = energy and frequency descriptors
+- edges = temporal flow and timbral similarity
 
-Recent visual upgrades in web preview:
-- Borderless points with opacity control for cleaner depth layering
-- Activation pulse + short vibration response on active regions
-- Meteor-style trail shaping (brighter head, softer fading tail)
-- Visual-range enhancements: depth tint, adaptive label density fade, peak-only chromatic split, micro-dolly camera pulse
-- New built-in `Cinematic+` visual preset option
-- Save/load/delete custom presets for all control drawer settings (stored locally in browser)
-- Orbit/Pan drag mode and explicit pause control for playback navigation
-- Hz-aware color mapping (`spectral spread` or `peak frequency`) and custom palette JSON import
-- Dedicated glow intensity/threshold controls for tighter bloom behavior
-- Connection style blending (`Connection Solidness`) from particle trails to solid thin lines
-- **New**: Toggle between `Wave` (organic) and `Straight` connection styles
-- **New**: Audio stem separation (isolating vocals, drums, bass, etc.) alongside full analysis
+The project includes:
+- Python analyzer pipeline (`python/bgm`) for reproducible offline extraction
+- Browser analyzer and cinematic renderer (`web/app.js`) for interactive exploration
+- optional stem separation (Demucs) for voice/instrument focused maps
+- JSON/PNG/WebM/OBJ exports
 
-## Quick Start (User-Friendly Scripts)
+## What It Does
 
-### Windows
+Given an input track, the system:
+1. splits audio into overlapping frames
+2. extracts spectral descriptors per frame
+3. normalizes/optionally smooths descriptors
+4. maps frames into a 3D point cloud
+5. builds temporal and/or similarity edges
+6. renders a reactive visual scene synchronized to playback
 
-1. Run `setup_windows.bat` (first time only).
-2. Run `analyze_song.bat` and drag your audio file into the window.
-3. Run `start_web.bat` to view the map.
+## Analyzer Modes
 
-### Mac / Linux
+The web app has two ingestion modes in `Session -> Analysis Model`:
 
-1. Run `./setup_mac.sh` (first time only).
-2. Run `./analyze_song.sh` and drag your audio into the terminal.
-3. Run `./start_web.sh` to view the map.
+1. `Classic (Browser)`
+- Drops audio (`.wav`, `.mp3`, etc.) directly into the web app.
+- Analysis runs in-browser with custom FFT logic.
+- Best for immediate preview and quick iteration.
 
-## CLI Install (For Developers)
+2. `Voice / Deep (Backend)`
+- Uses precomputed `features.json` (typically from Python analyzer).
+- Audio file is used for playback sync.
+- Supports stem-focused workflows (for example vocals-only geometry from Demucs outputs).
 
-### Option A: Docker (Recommended)
+## Architecture
 
+### Python Pipeline (`python/bgm`)
+- Loader/features: `python/bgm/features.py`
+- Normalization/smoothing: `python/bgm/normalize.py`
+- Schema validation: `python/bgm/schema.py`
+- Demucs stem split: `python/bgm/separate.py`
+- CLI orchestration: `python/bgm/analyze.py`
+
+Primary outputs:
+- `features.csv`
+- `features.json`
+- `metadata.json`
+- optional `edges.csv`
+
+### Web Pipeline (`web/app.js`)
+- Parses audio/JSON, computes or imports descriptors
+- Builds geometry (`manifold` or `time` mapping)
+- Draws nodes, trails, labels, edge waves/lines, post FX
+- Supports exports:
+  - analysis JSON
+  - PNG still
+  - WebM recording
+  - visible 3D graph as OBJ
+
+## How Node Placement Works
+
+Detailed math is in `docs/ALGORITHMS.md`. Summary:
+
+### Classic Browser descriptors (per frame)
+Computed from STFT magnitude with Hann window:
+- `rms`
+- `zcr`
+- `centroidHz`
+- `spreadHz`
+- `rolloffHz` (85% cumulative energy)
+- `flatness`
+- `peakHz`
+- `flux` (positive spectral change)
+
+### Feature normalization
+Each descriptor is min-max normalized to `[0,1]` (browser flow).
+
+### Mapping modes
+1. `Manifold (PCA)`
+- PCA projection of feature vectors to 3 components.
+- Components are range-normalized then scaled into scene coordinates.
+
+2. `Time Spine`
+- `x` follows time linearly.
+- `y` and `z` are weighted combinations of normalized descriptor values.
+
+Time Spine equations used in renderer:
+- `x = (tNorm - 0.5) * 36`
+- `y = (peakN - 0.5) * 20 + (centroidN - 0.5) * 7`
+- `z = (spreadN - 0.5) * 18 + (1 - flatnessN - 0.5) * 8 + (rmsN - 0.5) * 9 + (fluxN - 0.5) * 5`
+
+### Node visual attributes
+- size: function of normalized RMS
+- color: interpolated from selected palette using either spread or peak frequency metric
+
+## How Edges Are Built
+
+1. Temporal edges
+- Connect frame `i-1 -> i`.
+
+2. Similarity edges (kNN)
+- Browser mode: weighted descriptor-distance search with edge weight decay.
+- Python mode: cKDTree nearest-neighbor edges over selected columns.
+
+3. Connection styles
+- `line`: straight comet-like segment
+- `wave`: sinusoidal edge shape synchronized to playback time and frequency mix
+
+## Script Guide
+
+### One-click scripts
+
+| Script | Platform | Purpose |
+|---|---|---|
+| `setup_mac.sh` | macOS/Linux | Prepare Docker or local Python environment |
+| `setup_windows.bat` | Windows | Prepare Docker or local Python environment |
+| `analyze_song.sh` | macOS/Linux | Guided audio analysis and optional stem selection |
+| `analyze_song.bat` | Windows | Guided audio analysis and optional stem selection |
+| `start_web.sh` | macOS/Linux | Start web preview (Docker when daemon is ready, else Python fallback) |
+| `start_web.bat` | Windows | Start web preview |
+| `startup.sh` / `startup.bat` | macOS/Linux, Windows | Docker-first startup convenience script |
+
+### Typical user flow
+
+1. Run setup script once.
+2. Run analyze script and choose full mix or stems.
+3. Run web start script.
+4. Open `http://localhost:5173`.
+
+## Setup
+
+See complete instructions:
+- `docs/INSTALL.md`
+
+Quick path (macOS/Linux):
 ```bash
-git clone https://github.com/GeekatplayStudio/song-geometry-mapper.git
-cd song-geometry-mapper
-docker compose build analyzer
-docker compose run --rm test
+./setup_mac.sh
+./analyze_song.sh
+./start_web.sh
 ```
 
-Analyze audio:
+Quick path (Windows):
+- `setup_windows.bat`
+- `analyze_song.bat`
+- `start_web.bat`
 
-```bash
-docker compose run --rm analyzer \
-  --input /workspace/assets/example_audio/your_audio.wav \
-  --outdir /workspace/out \
-  --sr 48000 \
-  --n_fft 2048 \
-  --hop 512 \
-  --smooth 5 \
-  --norm zscore \
-  --edge-mode temporal
-```
+## Python CLI Examples
 
-Run web app:
-
-```bash
-docker compose up web
-```
-
-Open: `http://localhost:5173`
-
-### Option B: Local `.venv` (Project-Local Python)
-
-```bash
-git clone https://github.com/GeekatplayStudio/song-geometry-mapper.git
-cd song-geometry-mapper/python
-python3.11 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python -m pytest -q
-```
-
-Analyze audio:
-
+Full mix:
 ```bash
 python -m bgm.analyze \
-  --input /path/to/audio.wav \
+  --input /path/to/song.wav \
   --outdir ../out \
   --sr 48000 \
   --n_fft 2048 \
   --hop 512 \
   --smooth 5 \
-  --norm zscore \
-  --edge-mode temporal
+  --norm zscore
 ```
 
-Optional web app without Docker:
-
+Full mix + stems:
 ```bash
-cd ../web
-python3 -m http.server 5173
+python -m bgm.analyze \
+  --input /path/to/song.wav \
+  --outdir ../out \
+  --separate vocals drums
 ```
 
-Web visual utility tests:
-
+kNN edges export:
 ```bash
-node --test web/tests/*.test.js
+python -m bgm.analyze \
+  --input /path/to/song.wav \
+  --outdir ../out \
+  --edge-mode knn \
+  --knn-n 4 \
+  --knn-columns spectral_centroid_hz spectral_spread_hz spectral_flatness rms peak_hz
 ```
 
-## Default Mapping
+## Output Structure
 
-- `X`: time (`t_seconds`) or manifold axis
-- `Y`: peak/centroid frequency
-- `Z`: spectral spread / texture
-- Point size: `rms`
-- Point color: `spectral_spread_khz`
+Example:
+```text
+out/
+  features.csv
+  features.json
+  metadata.json
+  edges.csv                # if edge-mode != none
+  vocals/                  # if --separate vocals
+    features.csv
+    features.json
+    metadata.json
+    stems/
+      htdemucs/
+        <track_name>/
+          vocals.wav
+```
 
-## Outputs
+## Voice / Deep Mode Workflow
 
-- `out/features.csv`
-- `out/features.json`
-- `out/metadata.json`
-- `out/edges.csv` (optional)
+In the web app:
+1. choose `Voice / Deep (Backend)`
+2. load/drag `features.json` from analyzer output
+3. load/drag corresponding audio file (full mix or matching stem audio)
+4. press `Play` to drive active region synchronization
 
-## TouchDesigner
+Notes:
+- JSON can be raw frame arrays or exported analysis object with `frames`.
+- If JSON includes `x,y,z`, those positions are preserved.
 
-Open `touchdesigner/README.md` and follow the node-by-node recipe.
-Use:
-- `out/features.csv`
-- `out/edges.csv` (optional)
+## Documentation Map
 
-`touchdesigner/SongGeometryMapper.toe` is a placeholder file for the build.
-
-## Docs
-
-- Product requirements: `PRD.md`
-- Technical requirements: `TRD.md`
-- Development phases: `DEVELOPMENT_STEPS.md`
-- Installation details: `docs/INSTALL.md`
+- Installation: `docs/INSTALL.md`
 - Development workflow: `docs/DEVELOPMENT.md`
-- Python analyzer notes: `python/README.md`
-- Web preview notes: `web/README.md`
+- Detailed algorithms and formulas: `docs/ALGORITHMS.md`
+- Research references: `docs/RESEARCH.md`
+- Python analyzer details: `python/README.md`
+- Web renderer details: `web/README.md`
+- Product/technical requirements: `PRD.md`, `TRD.md`
 
-## Repo Layout
+## Research and Foundations
+
+This project is built on standard DSP, dimensionality reduction, and source separation methods. See:
+- `docs/RESEARCH.md`
+
+Direct references:
+- librosa paper: https://doi.org/10.25080/Majora-7b98e3ed-003
+- Demucs (waveform source separation): https://arxiv.org/abs/1911.13254
+- Hybrid Demucs: https://arxiv.org/abs/2111.03600
+- HT Demucs: https://arxiv.org/abs/2211.08553
+- FFT classic reference: https://doi.org/10.1090/S0025-5718-1965-0178586-1
+
+## Repository Layout
 
 ```text
 song-geometry-mapper/
   python/
   web/
   touchdesigner/
+  docs/
   assets/
   out/
-  docs/
 ```
 
-## Credits and Licensing
+## License
 
-This is a clean-room implementation inspired by publicly described spectral-to-visual mapping concepts. No proprietary assets or private pipelines are included.
-
-Choose a license before public distribution (MIT or Apache-2.0 recommended).
+Add a license before public distribution (for example MIT or Apache-2.0).

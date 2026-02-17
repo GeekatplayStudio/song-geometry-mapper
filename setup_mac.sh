@@ -2,26 +2,35 @@
 
 # Song Geometry Mapper - Setup (Mac/Linux)
 
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
 echo "==================================================="
 echo "Song Geometry Mapper - Setup (Mac/Linux)"
 echo "==================================================="
 
 # Check for Docker
 if command -v docker >/dev/null 2>&1; then
-    echo "[INFO] Docker detected. Building container..."
-    docker compose build analyzer
-    if [ $? -ne 0 ]; then
-        echo "[ERROR] Docker build failed."
-        exit 1
+    if docker info >/dev/null 2>&1; then
+        echo "[INFO] Docker detected. Building container..."
+        if docker compose build analyzer; then
+            echo "[SUCCESS] Docker environment ready."
+            echo ""
+            echo "Setup complete! You can now use './analyze_song.sh' and './start_web.sh'."
+            exit 0
+        fi
+
+        echo "[WARN] Docker build failed. Falling back to local Python setup."
+    else
+        echo "[WARN] Docker is installed but daemon is unavailable."
+        echo "[INFO] Falling back to local Python setup."
     fi
-    echo "[SUCCESS] Docker environment ready."
-    echo ""
-    echo "Setup complete! You can now use './analyze_song.sh' and './start_web.sh'."
-    exit 0
 fi
 
 # Fallback to Python
-echo "[INFO] Docker not found. Checking for Python..."
+echo "[INFO] Checking for Python..."
 if ! command -v python3 >/dev/null 2>&1; then
     echo "[ERROR] Python 3 not found. Please install Docker OR Python 3.11+."
     exit 1

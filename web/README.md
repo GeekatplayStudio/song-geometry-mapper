@@ -1,75 +1,103 @@
-# Geekatplay Studio - Web Preview
+# Web Viewer (`web/`)
 
-Premium dark-mode frontend for local audio upload and full-song 3D spectral mapping.
+The web app is the interactive renderer for Song Geometry Mapper.
 
-## Highlights
+It can analyze audio in-browser or load backend-generated features for playback-synced visualization.
 
-- Fullscreen cinematic stage with bottom popup controls
-- Bottom tabbed controls (`Session`, `Mapping`, `Visual`, `Post FX`) with one panel shown at a time
-- Static 3D song map (all points placed once from spectral analysis)
-- Mapping modes: `Manifold (PCA)` and `Time Spine`
-- Color mapped by **spectral spread (kHz)** with live legend
-- Reactive glow only around currently active musical region
-- Temporal + kNN connections, plus flowing trail path over playback
-- Camera presets (`Drift`, `Orbit`, `Pulse`, `Dive`) with manual drag/zoom
-- Label toggle, connection toggle, bloom/fog controls
-- Point opacity control with borderless points for cleaner depth styling
-- Point depth (3D) control with stronger spherical shading
-- Activation pulse + micro-vibration for short reactive "alive" motion
-- Meteor-style trails with bright head and fading tail profile
-- Adaptive label density fading to reduce clutter in dense regions
-- Depth atmospheric tint and subtle peak-only chromatic split for extra cinematic range
-- New built-in `Cinematic+` visual preset
-- Save/load/delete custom presets (all control drawer settings) in browser local storage
-- Explicit `Pause` button and drag mode switch (`Orbit` / `Pan`)
-- Color metric switch (`Spectral Spread` / `Peak Frequency`) and custom palette JSON loading
-- Separate `Glow Intensity` and `Glow Threshold` controls for finer bloom management
-- Additional glow shaping controls: `Glow Shift (Infra)` and `Glow Decay`
-- Connection trail controls: `Connection Trail Length`, `Connection Tail Fade`, and `Node Hit Pulse`
-- `Connection Solidness` blends style from particle-like moving links to solid thin lines
-- Static camera preset plus `Neighbor Boost` for clearer kNN link visibility
-- Motion quality controls: `Motion Blur` and richer dissolving edge-comet behavior
-- Export still PNG and record WebM preview video locally (with song audio)
-- Export analyzed song data as JSON (`Export Analysis JSON`)
-- Metric readouts hold latest valid values instead of dropping to zero during inactive frames
+## Modes
 
-## Run (Docker)
+### 1. Classic (Browser)
+- Load an audio file.
+- Browser computes descriptors and geometry locally.
+- Fast iteration, no external pipeline required.
+
+### 2. Voice / Deep (Backend)
+- Load `features.json` generated externally (typically Python analyzer).
+- Load matching audio for playback sync.
+- Useful for stem-focused visualizations (vocals, drums, bass, other).
+
+## Core Rendering Features
+
+- fullscreen canvas stage with tabbed control drawer
+- mapping modes:
+  - `Manifold (PCA)`
+  - `Time Spine`
+- temporal and kNN connectivity
+- edge styles:
+  - `Wave` (playback/frequency-synced)
+  - `Straight`
+- reactive trails, glow, fog, pulse, and flow particles
+- camera presets plus manual orbit/pan/zoom
+- palette system with built-in and custom JSON palettes
+
+## What Defines a Node
+
+Each node represents one audio frame and includes:
+- frame time
+- spectral descriptors (centroid/spread/rolloff/flatness/zcr/peak/flux/rms)
+- 3D position (mapped from normalized descriptors)
+- visual properties (size, color)
+
+Detailed formulas: `../docs/ALGORITHMS.md`
+
+## Connection and Wave Behavior
+
+- temporal edges connect neighboring frames in time
+- kNN edges connect descriptor-nearest frames
+- wave connections are synchronized to playback time (`player.currentTime`)
+- wave frequency blends edge-local descriptor frequency and current active playback frame
+- wave endpoints are pinned to node positions
+
+## Exports
+
+From `Post FX & Export`:
+- `Export Analysis JSON`
+- `Export 3D OBJ` (currently visible nodes + visible links)
+- `Capture Still` (PNG)
+- `Start/Stop Video` (WebM)
+
+## Run
+
+### Docker
 
 From repo root:
-
 ```bash
 docker compose up web
 ```
 
 Open:
-
 - `http://localhost:5173`
 
-## Web Tests
-
-Run focused visual utility unit tests:
-
-```bash
-node --test web/tests/*.test.js
-```
-
-## Run (No Docker)
+### No Docker
 
 From repo root:
-
 ```bash
 cd web
 python3 -m http.server 5173
 ```
 
 Open:
-
 - `http://localhost:5173`
 
-## Usage
+## Tests
 
-1. Load an audio file in the `Session` panel.
-2. Wait for `Analyzing 100%` and status `Ready`.
-3. Press `Play` to animate trail/flow through the fixed 3D map.
-4. Tune mapping, edges, and camera in the bottom controls drawer.
-5. Capture still or start/stop video recording from `Post FX & Export`.
+```bash
+node --test web/tests/*.test.js
+```
+
+## Typical Usage
+
+1. Choose `Classic` or `Voice / Deep` mode.
+2. Load source data:
+   - Classic: audio
+   - Voice/Deep: `features.json` plus audio
+3. Wait for `Ready`.
+4. Press `Play`.
+5. Tune mapping/visual/FX controls.
+6. Export analysis, media, or OBJ.
+
+## Related Docs
+
+- front page: `../README.md`
+- installation: `../docs/INSTALL.md`
+- algorithms: `../docs/ALGORITHMS.md`
