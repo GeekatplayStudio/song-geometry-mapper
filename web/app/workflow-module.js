@@ -5,6 +5,7 @@ export function createWorkflowModule(runtime) {
     state,
     drawerToggle,
     controlDrawer,
+    tabButtons,
     fileLabel,
     trackCaption,
     player,
@@ -598,7 +599,7 @@ export function createWorkflowModule(runtime) {
     const next = tabId || "session";
     state.activeTab = next;
   
-    for (const button of tabButtons) {
+    for (const button of tabButtons || []) {
       const active = button.dataset.tabTarget === next;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-selected", String(active));
