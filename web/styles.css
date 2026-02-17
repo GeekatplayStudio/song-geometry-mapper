@@ -256,6 +256,7 @@ h1 {
   left: 50%;
   transform: translateX(-50%);
   width: min(760px, calc(100vw - 22px));
+  max-height: calc(100vh - 118px);
   bottom: 62px;
   z-index: 25;
   border-radius: 14px;
@@ -263,6 +264,7 @@ h1 {
   background: linear-gradient(140deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.01)), rgba(6, 11, 18, 0.84);
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.56);
   backdrop-filter: blur(18px);
+  overflow: hidden;
   opacity: 1;
   pointer-events: auto;
   transition: transform 220ms ease, opacity 220ms ease;
@@ -367,8 +369,9 @@ h1 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px 10px;
   align-content: start;
-  max-height: none;
-  overflow: visible;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 4px;
 }
 
@@ -539,12 +542,12 @@ h1 {
 
 @media (max-width: 1260px) {
   .control-drawer {
-    max-height: none;
-    overflow: visible;
+    max-height: calc(100vh - 112px);
+    overflow: hidden;
   }
 
   .control-drawer .tab-panel.is-active {
-    max-height: none;
+    max-height: calc(100vh - 210px);
   }
 
   .legend {
@@ -575,13 +578,13 @@ h1 {
   .control-drawer {
     width: calc(100vw - 14px);
     bottom: 58px;
-    max-height: 62vh;
+    max-height: calc(100vh - 96px);
   }
 
   .control-drawer .tab-panel.is-active {
     grid-template-columns: 1fr;
-    max-height: none;
-    overflow: visible;
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
   }
 
   .tabs-dock {

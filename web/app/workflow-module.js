@@ -502,6 +502,10 @@ export function createWorkflowModule(runtime) {
     formData.append("edge_mode", "none");
     const requestedStem = voiceStem?.value || "vocals";
     formData.append("separate", requestedStem);
+    const requestedCacheDir = window.localStorage.getItem("sgm.voice-cache-dir")?.trim();
+    if (requestedCacheDir) {
+      formData.append("cache_dir", requestedCacheDir);
+    }
   
     const response = await fetch(VOICE_API_ANALYZE_URL, {
       method: "POST",

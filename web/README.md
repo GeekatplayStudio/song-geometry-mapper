@@ -16,6 +16,9 @@ It can analyze audio in-browser or load backend-generated features for playback-
 - Local voice backend (`bgm.web_api`) runs analyzer automatically and returns JSON payload.
 - Web app auto-loads generated geometry and binds playback from the same file.
 - `Voice Focus` lets you request a stem target (`vocals`, `drums`, `bass`, `other`, or full mix).
+- Backend persists `{song-name}.analysis.json` in cache (tmp by default), and reuses it for same file+settings.
+- Optional custom cache directory can be set directly in Session → Voice options (`Cache Folder`).
+- It stores to `localStorage` key `sgm.voice-cache-dir` and is sent as `cache_dir` on backend requests.
 - Manual `features.json` loading is still supported.
 
 ## Code Structure
@@ -39,6 +42,7 @@ It can analyze audio in-browser or load backend-generated features for playback-
   - `Wave` (playback/frequency-synced)
   - `Straight`
 - reactive trails, glow, fog, pulse, and flow particles
+- `Wave Amplification` control boosts wave-edge amplitude when motion is too subtle
 - camera presets plus manual orbit/pan/zoom
 - palette system with built-in and custom JSON palettes
 

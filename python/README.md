@@ -131,6 +131,9 @@ Schema checks (`python/bgm/schema.py`):
 Primary flow:
 - Web `Voice / Deep (Backend)` uploads audio to local API (`bgm.web_api`).
 - API runs this analyzer pipeline and returns generated payload automatically.
+- API also stores `{song-name}.analysis.json` in cache and reuses it for matching file/settings.
+- Default cache root: system temp dir `sgm-voice-api-cache`.
+- Override cache root with `BGM_WEB_API_CACHE_DIR=/your/path` or request form field `cache_dir`.
 
 Manual fallback flow:
 1. load `features.json`

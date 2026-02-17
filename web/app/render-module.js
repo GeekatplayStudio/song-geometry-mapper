@@ -33,8 +33,10 @@ export function createRenderModule(runtime) {
     edgeMode,
     edgeStyle,
     edgeOpacity,
+    edgeBrightness,
     edgeSolidness,
     edgeTrailLength,
+    waveAmplification,
     knnBoost,
     cinemaMode,
     glowShift,
@@ -488,6 +490,7 @@ export function createRenderModule(runtime) {
   
     const mode = edgeMode.value;
     const edgeStrength = Number(edgeOpacity.value);
+    const edgeLightBoost = Number(edgeBrightness?.value || 1);
     const trailLength = Number(edgeTrailLength.value);
     const tailFade = Number(edgeTailFade.value);
     const solidness = Number(edgeSolidness.value);
@@ -529,7 +532,8 @@ export function createRenderModule(runtime) {
   
       // Wave properties are synced to current playback frequency.
       const waveFreq = 1.1 + freqFactor * 9.5;
-      const waveAmp = Math.min(dist * 0.14, (1.25 + freqFactor * 3.9) * (0.42 + activity * 1.15));
+      const waveAmpBoost = Number(waveAmplification?.value || 1);
+      const waveAmp = Math.min(dist * 0.2, (1.25 + freqFactor * 3.9) * (0.42 + activity * 1.15) * waveAmpBoost);
       const waveSpeed = 0.55 + freqFactor * 2.2 + Number(motionStrength.value) * 0.55;
   
       const getWavePoint = (t) => {
@@ -719,7 +723,7 @@ export function createRenderModule(runtime) {
           activityForIndex(edgeB, activeIndex, window),
         );
   
-        const alpha = clamp((0.04 + activity * 0.42) * edgeStrength * cinemaBoost * idleVisibility, 0.01, 0.74);
+        const alpha = clamp((0.04 + activity * 0.42) * edgeStrength * edgeLightBoost * cinemaBoost * idleVisibility, 0.01, 0.96);
         const width = 0.52 + activity * 2.25;
         const color = activity > 0.04 ? b.frame.color : { r: 105, g: 118, b: 138 };
         const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
@@ -765,9 +769,13 @@ export function createRenderModule(runtime) {
         );
   
         const alpha = clamp(
-          (0.025 + edge.weight * 0.16 * neighborVisibility + activity * 0.26) * edgeStrength * (cinemaMode.checked ? 1 : 0.8) * idleVisibility,
+          (0.025 + edge.weight * 0.16 * neighborVisibility + activity * 0.26)
+            * edgeStrength
+            * edgeLightBoost
+            * (cinemaMode.checked ? 1 : 0.8)
+            * idleVisibility,
           0.008,
-          0.7,
+          0.95,
         );
         const width = 0.5 + edge.weight * 1.42 * neighborVisibility + activity * 1.2;
         const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);

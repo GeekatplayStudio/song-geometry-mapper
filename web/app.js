@@ -37,6 +37,9 @@ const {
   helpBtn,
   helpModal,
   closeHelpBtn,
+  voiceCacheDir,
+  voiceCacheClearBtn,
+  voiceCacheStatus,
   offsetX,
   offsetY,
   offsetZ,
@@ -81,9 +84,52 @@ const {
 } = runtime;
 
 function bindEvents() {
+  const VOICE_CACHE_DIR_KEY = "sgm.voice-cache-dir";
+
+  function refreshVoiceCacheStatus() {
+    if (!voiceCacheStatus) {
+      return;
+    }
+    const path = (window.localStorage.getItem(VOICE_CACHE_DIR_KEY) || "").trim();
+    voiceCacheStatus.textContent = path
+      ? `Cache output: ${path}`
+      : "Cache output: default temp folder";
+  }
+
     function updateOffsetLabel(input, label) {
         label.textContent = input.value;
     }
+
+  if (voiceCacheDir) {
+    const savedCacheDir = window.localStorage.getItem(VOICE_CACHE_DIR_KEY) || "";
+    voiceCacheDir.value = savedCacheDir;
+    voiceCacheDir.addEventListener("input", () => {
+      const path = (voiceCacheDir.value || "").trim();
+      if (path) {
+        window.localStorage.setItem(VOICE_CACHE_DIR_KEY, path);
+      } else {
+        window.localStorage.removeItem(VOICE_CACHE_DIR_KEY);
+      }
+      refreshVoiceCacheStatus();
+    });
+  }
+
+  if (voiceCacheClearBtn) {
+    voiceCacheClearBtn.addEventListener("click", () => {
+      window.localStorage.removeItem(VOICE_CACHE_DIR_KEY);
+      if (voiceCacheDir) {
+        voiceCacheDir.value = "";
+      }
+      setSessionLabel("Voice Cache: Default Temp", false);
+      refreshVoiceCacheStatus();
+    });
+  }
+
+  for (const modeRadio of document.querySelectorAll('input[name="analysis-mode"]')) {
+    modeRadio.addEventListener("change", refreshVoiceCacheStatus);
+  }
+
+  refreshVoiceCacheStatus();
 
     if (offsetX && valOffsetX) {
         offsetX.addEventListener("input", () => updateOffsetLabel(offsetX, valOffsetX));

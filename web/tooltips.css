@@ -95,6 +95,8 @@
   position: fixed;
   z-index: 9999;
   inset: 0;
+  padding: 14px;
+  overflow-y: auto;
   background-color: rgba(0, 5, 10, 0.85);
   backdrop-filter: blur(8px);
   align-items: center;
@@ -113,6 +115,9 @@
   padding: 2.5rem;
   width: 90%;
   max-width: 650px;
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 16px;
   position: relative;
   color: #e7eef9;

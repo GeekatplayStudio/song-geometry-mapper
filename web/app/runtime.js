@@ -30,9 +30,11 @@ export function createRuntime() {
   const pointOpacity = document.getElementById("point-opacity");
   const pointDepth = document.getElementById("point-depth");
   const edgeOpacity = document.getElementById("edge-opacity");
+  const edgeBrightness = document.getElementById("edge-brightness");
   const edgeSolidness = document.getElementById("edge-solidness");
   const edgeTrailLength = document.getElementById("edge-trail-length");
   const edgeTailFade = document.getElementById("edge-tail-fade");
+  const waveAmplification = document.getElementById("wave-amplification");
   const trailPersistence = document.getElementById("trail-persistence");
   const trailFlare = document.getElementById("trail-flare");
   const flowDensity = document.getElementById("flow-density");
@@ -78,6 +80,9 @@ export function createRuntime() {
   
   const nodesOnly = document.getElementById("nodes-only");
   const voiceStem = document.getElementById("voice-stem");
+  const voiceCacheDir = document.getElementById("voice-cache-dir");
+  const voiceCacheClearBtn = document.getElementById("voice-cache-clear");
+  const voiceCacheStatus = document.getElementById("voice-cache-status");
   const offsetX = document.getElementById("offset-x");
   const offsetY = document.getElementById("offset-y");
   const offsetZ = document.getElementById("offset-z");
@@ -294,9 +299,11 @@ export function createRuntime() {
     pointOpacity,
     pointDepth,
     edgeOpacity,
+    edgeBrightness,
     edgeSolidness,
     edgeTrailLength,
     edgeTailFade,
+    waveAmplification,
     trailPersistence,
     trailFlare,
     flowDensity,
@@ -336,6 +343,9 @@ export function createRuntime() {
     closeHelpBtn,
     nodesOnly,
     voiceStem,
+    voiceCacheDir,
+    voiceCacheClearBtn,
+    voiceCacheStatus,
     offsetX,
     offsetY,
     offsetZ,
