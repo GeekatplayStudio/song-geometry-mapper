@@ -1,0 +1,6 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "GC": true,
+        "Move-Item": true
+    }
+}

@@ -78,6 +78,18 @@ const legendTitle = document.querySelector(".legend-title");
 const legendBar = document.getElementById("legend-bar");
 const legendScale = document.getElementById("legend-scale");
 
+const helpBtn = document.getElementById("help-btn");
+const helpModal = document.getElementById("help-modal");
+const closeHelpBtn = document.getElementById("close-help");
+
+const nodesOnly = document.getElementById("nodes-only");
+const offsetX = document.getElementById("offset-x");
+const offsetY = document.getElementById("offset-y");
+const offsetZ = document.getElementById("offset-z");
+const valOffsetX = document.getElementById("val-offset-x");
+const valOffsetY = document.getElementById("val-offset-y");
+const valOffsetZ = document.getElementById("val-offset-z");
+
 const metricRms = document.getElementById("metric-rms");
 const metricCentroid = document.getElementById("metric-centroid");
 const metricSpread = document.getElementById("metric-spread");
@@ -1418,9 +1430,9 @@ function projectPoint3D(x, y, z, nowSec, activity = 0) {
   const spreadScale = Number(freqSpread.value);
   const motion = Number(motionStrength.value) * 0.24;
 
-  let px = x * spreadScale;
-  let py = y;
-  let pz = z * spreadScale;
+  let px = (x + Number(offsetX.value)) * spreadScale;
+  let py = (y + Number(offsetY.value));
+  let pz = (z + Number(offsetZ.value)) * spreadScale;
 
   if (motion > 0 && activity > 0.001 && !player.paused) {
     const wave = activity * motion;
@@ -1462,6 +1474,11 @@ function projectPoint3D(x, y, z, nowSec, activity = 0) {
 }
 
 function drawBackground(nowSec) {
+  if (nodesOnly.checked) {
+      if (ctx.fillStyle !== "#000000") ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, state.width, state.height);
+      return;
+  }
   const preset = PRESET_BACKGROUND[visualPreset.value] || PRESET_BACKGROUND.cinematic;
   const blur = Number(motionBlur.value);
   const veilAlpha = clamp(0.02 + blur * 0.07, 0.01, 0.12);
@@ -2129,16 +2146,20 @@ function drawMap(nowSec) {
 
   projected.sort((a, b) => b.depth - a.depth);
 
-  drawEdges(byIndex, activeIndex, nowSec);
+  if (!nodesOnly.checked) {
+      drawEdges(byIndex, activeIndex, nowSec);
+  }
 
   for (const item of projected) {
     item.connectionPulse = state.connectionPulse.get(item.index) || 0;
   }
 
   drawPoints(projected, activeIndex, nowSec);
-  drawLabels(projected, activeIndex);
-
-  drawFlowParticles(activeIndex, nowSec);
+  
+  if (!nodesOnly.checked) {
+      drawLabels(projected, activeIndex);
+      drawFlowParticles(activeIndex, nowSec);
+  }
 
   let active = byIndex.get(activeIndex);
   if (!active && activeIndex >= 0) {
@@ -2498,6 +2519,28 @@ function stopRecording() {
 }
 
 function bindEvents() {
+  function updateOffsetLabel(input, label) {
+    label.textContent = input.value;
+  }
+
+  offsetX.addEventListener("input", () => updateOffsetLabel(offsetX, valOffsetX));
+  offsetY.addEventListener("input", () => updateOffsetLabel(offsetY, valOffsetY));
+  offsetZ.addEventListener("input", () => updateOffsetLabel(offsetZ, valOffsetZ));
+
+  helpBtn.addEventListener("click", () => {
+      helpModal.setAttribute("aria-hidden", "false");
+  });
+
+  closeHelpBtn.addEventListener("click", () => {
+      helpModal.setAttribute("aria-hidden", "true");
+  });
+
+  window.addEventListener("click", (e) => {
+      if (e.target === helpModal) {
+          helpModal.setAttribute("aria-hidden", "true");
+      }
+  });
+
   fileInput.addEventListener("change", (event) => {
     const [file] = event.target.files;
     loadAndAnalyzeFile(file);
