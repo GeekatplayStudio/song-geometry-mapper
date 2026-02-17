@@ -131,6 +131,8 @@ Time Spine equations used in renderer:
 | `analyze_song.bat` | Windows | Guided audio analysis and optional stem selection |
 | `start_web.sh` | macOS/Linux | Start web preview plus local voice analyzer API |
 | `start_web.bat` | Windows | Start web preview plus local voice analyzer API |
+| `convert_video.sh` | macOS/Linux | Convert recorded WebM to high-quality MP4 (optional 4K output) |
+| `convert_video.bat` | Windows | Convert recorded WebM to high-quality MP4 (optional 4K output) |
 | `startup.sh` / `startup.bat` | macOS/Linux, Windows | Docker-first startup convenience script |
 
 ### Typical user flow
@@ -138,7 +140,9 @@ Time Spine equations used in renderer:
 1. Run setup script once.
 2. Run analyze script and choose full mix or stems.
 3. Run web start script.
-4. Open `http://localhost:5173`.
+4. Record with `Start/Stop Video` (WebM) in the app for maximum reliability.
+5. Convert WebM to MP4 using `convert_video.sh` or `convert_video.bat`.
+6. Open `http://localhost:5173`.
 
 ## Setup
 

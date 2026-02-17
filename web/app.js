@@ -34,6 +34,7 @@ const {
   export3dObjBtn,
   startRecordingBtn,
   stopRecordingBtn,
+  copyMp4CommandBtn,
   helpBtn,
   supportVladBtn,
   focusToggleBtn,
@@ -75,6 +76,7 @@ const {
   captureStill,
   startRecording,
   stopRecording,
+  copyMp4ConversionCommand,
   toggleDrawer,
   resetCamera,
   updateCameraMotion,
@@ -322,6 +324,9 @@ function bindEvents() {
   export3dObjBtn?.addEventListener("click", exportVisible3dObj);
   startRecordingBtn.addEventListener("click", startRecording);
   stopRecordingBtn.addEventListener("click", stopRecording);
+  copyMp4CommandBtn?.addEventListener("click", () => {
+    copyMp4ConversionCommand();
+  });
 
   canvas.addEventListener("pointerdown", (event) => {
     state.dragging = true;

@@ -755,7 +755,9 @@ export function createWorkflowModule(runtime) {
     recorder.addEventListener("stop", () => {
       const blob = new Blob(chunks, { type: mimeType });
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      downloadBlob(blob, `song-geometry-${stamp}.webm`);
+      const filename = `song-geometry-${stamp}.webm`;
+      state.lastRecordedWebmFilename = filename;
+      downloadBlob(blob, filename);
   
       for (const track of videoTracks) {
         track.stop();
@@ -783,6 +785,45 @@ export function createWorkflowModule(runtime) {
     state.recording.recorder.stop();
   }
 
+  function quoteShellArg(value) {
+    return `'${String(value || "").replace(/'/g, `'\\''`)}'`;
+  }
+
+  async function copyMp4ConversionCommand() {
+    const fallbackName = "song-geometry-latest.webm";
+    const suggestedInput = (state.lastRecordedWebmFilename || fallbackName).trim();
+    const rawInput = window.prompt("Enter WebM filename or full path for conversion:", suggestedInput);
+    if (rawInput == null) {
+      return false;
+    }
+
+    const inputPath = rawInput.trim();
+    if (!inputPath) {
+      setSessionLabel("MP4 Command: Missing Input", false);
+      return false;
+    }
+
+    const outputPath = inputPath.replace(/\.webm$/i, "") + ".mp4";
+    const command = `ffmpeg -y -i ${quoteShellArg(inputPath)} -c:v libx264 -preset slow -crf 17 -pix_fmt yuv420p -c:a aac -b:a 320k -movflags +faststart ${quoteShellArg(outputPath)}`;
+
+    let copied = false;
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(command);
+        copied = true;
+      } catch (error) {
+        console.warn("Clipboard copy failed; falling back to prompt", error);
+      }
+    }
+
+    if (!copied) {
+      window.prompt("Copy this MP4 conversion command:", command);
+    }
+
+    setSessionLabel(copied ? "MP4 Command Copied" : "MP4 Command Ready", false);
+    return true;
+  }
+
   return {
     buildAnalysisExportPayload,
     exportAnalysisJson,
@@ -806,5 +847,6 @@ export function createWorkflowModule(runtime) {
     getPlayerAudioTracksForRecording,
     startRecording,
     stopRecording,
+    copyMp4ConversionCommand,
   };
 }

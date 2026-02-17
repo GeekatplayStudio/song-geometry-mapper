@@ -28,6 +28,7 @@ export function createRenderModule(runtime) {
     offsetZ,
     pointScale,
     pointOpacity,
+    pointSolidness,
     pointDepth,
     pulseStrength,
     nodeHitPulse,
@@ -515,6 +516,22 @@ export function createRenderModule(runtime) {
     const useWave = style === "wave";
     const useRibbon = style === "ribbon";
     const lowUseColor = { r: 74, g: 106, b: 236 };
+
+    if (!player.paused && state.connectionUsage.size > 0) {
+      let decayedMax = 0;
+      for (const [key, value] of state.connectionUsage.entries()) {
+        const next = value * 0.992;
+        if (next < 0.0008) {
+          state.connectionUsage.delete(key);
+          continue;
+        }
+        state.connectionUsage.set(key, next);
+        if (next > decayedMax) {
+          decayedMax = next;
+        }
+      }
+      state.connectionUsageMax = decayedMax;
+    }
   
     const registerConnectionPulse = (index, amount) => {
       if (index < 0) {
@@ -531,7 +548,7 @@ export function createRenderModule(runtime) {
         return;
       }
       const current = state.connectionUsage.get(key) || 0;
-      const increment = clamp(0.02 + activity * 0.28, 0.01, 0.32);
+      const increment = clamp(0.006 + activity * 0.08, 0.003, 0.11);
       const next = current + increment;
       state.connectionUsage.set(key, next);
       if (next > state.connectionUsageMax) {
@@ -543,8 +560,8 @@ export function createRenderModule(runtime) {
       const maxUsage = Math.max(0.0001, state.connectionUsageMax || 0);
       const usage = state.connectionUsage.get(key) || 0;
       const usageNorm = clamp(usage / maxUsage, 0, 1);
-      const activityBoost = clamp(activity * 0.55, 0, 0.55);
-      const usageMix = clamp(usageNorm * 0.9 + activityBoost, 0, 1);
+      const activityBoost = clamp(activity * 0.08, 0, 0.08);
+      const usageMix = clamp(usageNorm * 0.92 + activityBoost, 0, 1);
       return mixColor(lowUseColor, baseColor, usageMix);
     };
   
@@ -1102,6 +1119,7 @@ export function createRenderModule(runtime) {
     const glowDecayRate = Number(glowDecay.value);
     const fog = Number(fogStrength.value);
     const pointAlpha = Number(pointOpacity.value);
+    const solidness = Number(pointSolidness?.value || 0.45);
     const pointDepthAmount = Number(pointDepth.value);
     const pulseControl = Number(pulseStrength.value);
     const motion = Number(motionStrength.value);
@@ -1113,12 +1131,12 @@ export function createRenderModule(runtime) {
   
     for (const item of projected) {
       const fogFactor = clamp(item.fog * fog, 0, 1);
-      const darkMix = clamp(0.26 + fogFactor * 0.55, 0.26, 0.86);
+      const darkMix = clamp(0.26 + fogFactor * 0.55 - solidness * 0.14, 0.16, 0.86);
       const tintedBase = mixColor(item.frame.color, { r: 10, g: 14, b: 20 }, darkMix);
       const atmosphereMix = computeAtmosphereMix(fogFactor, item.depth);
       const baseColor = mixColor(tintedBase, atmosphereColor, atmosphereMix);
   
-      const baseAlpha = clamp((0.18 + item.frame.rmsN * 0.4 - fogFactor * 0.18) * pointAlpha, 0.1, 0.96);
+      const baseAlpha = clamp((0.18 + item.frame.rmsN * 0.4 - fogFactor * 0.18) * pointAlpha * (0.74 + solidness * 0.78), 0.1, 0.98);
       const pulsePhase = Math.sin(nowSec * 18 + item.index * 0.41) * 0.5 + 0.5;
       const pulseEnvelope = clamp((item.activity * 0.58 + item.pulse * 1.45 + item.connectionPulse * 1.25) * pulseControl, 0, 3.8);
       const pulseScale = 1 + pulseEnvelope * (0.16 + 0.28 * pulsePhase);
@@ -1134,9 +1152,9 @@ export function createRenderModule(runtime) {
         py,
         radius * (1 + pointDepthAmount * 0.42),
       );
-      sphereGradient.addColorStop(0, rgba(mixColor(item.frame.color, { r: 255, g: 255, b: 255 }, 0.46), clamp(baseAlpha * 1.14, 0.16, 1).toFixed(3)));
+      sphereGradient.addColorStop(0, rgba(mixColor(item.frame.color, { r: 255, g: 255, b: 255 }, 0.42 - solidness * 0.12), clamp(baseAlpha * (1.04 + solidness * 0.24), 0.16, 1).toFixed(3)));
       sphereGradient.addColorStop(0.42, rgba(baseColor, clamp(baseAlpha * (0.86 + pointDepthAmount * 0.18), 0.1, 1).toFixed(3)));
-      sphereGradient.addColorStop(1, rgba(mixColor(baseColor, { r: 4, g: 6, b: 10 }, 0.42), clamp(baseAlpha * (0.58 + pointDepthAmount * 0.22), 0.06, 0.96).toFixed(3)));
+      sphereGradient.addColorStop(1, rgba(mixColor(baseColor, { r: 4, g: 6, b: 10 }, 0.42 - solidness * 0.18), clamp(baseAlpha * (0.58 + pointDepthAmount * 0.22 + solidness * 0.12), 0.08, 0.98).toFixed(3)));
   
       ctx.fillStyle = sphereGradient;
       ctx.beginPath();

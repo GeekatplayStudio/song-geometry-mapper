@@ -2,6 +2,7 @@ import { sanitizePresetName, sortPresetEntries } from "../preset_utils.js";
 
 export function createAnalysisModule(runtime) {
   const {
+    controlDrawer,
     mappingMode,
     knnNeighbors,
     visualPreset,
@@ -671,7 +672,8 @@ export function createAnalysisModule(runtime) {
   }
   
   function getPresetControlElements() {
-    const controls = controlDrawer.querySelectorAll("input, select");
+    const scope = controlDrawer || document;
+    const controls = scope.querySelectorAll("input, select");
     const relevant = [];
   
     for (const control of controls) {

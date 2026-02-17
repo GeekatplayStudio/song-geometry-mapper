@@ -44,6 +44,7 @@ It can analyze audio in-browser or load backend-generated features for playback-
   - `Ribbon` (fluid strip + traveling light wave)
 - reactive trails, glow, fog, pulse, and flow particles
 - `Wave Amplification` control boosts wave-edge amplitude when motion is too subtle
+- `Point Solidness` control makes node spheres denser and less translucent
 - lower-right `H/S` focus toggle hides/restores all overlay windows for fullscreen display mode
 - camera presets plus manual orbit/pan/zoom
 - palette system with built-in and custom JSON palettes
@@ -62,7 +63,7 @@ Detailed formulas: `../docs/ALGORITHMS.md`
 
 - temporal edges connect neighboring frames in time
 - kNN edges connect descriptor-nearest frames
-- connection color now reflects usage during playback (rare use = low-frequency blue, frequent use = active color)
+- connection color reflects live usage frequency with decay (rare/recently inactive = low-frequency blue, frequently used = active color)
 - wave connections are synchronized to playback time (`player.currentTime`)
 - wave frequency blends edge-local descriptor frequency and current active playback frame
 - wave endpoints are pinned to node positions
@@ -74,6 +75,14 @@ From `Post FX & Export`:
 - `Export 3D OBJ` (currently visible nodes + visible links)
 - `Capture Still` (PNG)
 - `Start/Stop Video` (WebM)
+- `Copy MP4 Command` (copies a ready ffmpeg command using the last recorded WebM name or your entered path)
+
+Recommended video workflow:
+- Record in-app as WebM first (most reliable browser capture path).
+- Convert to MP4 using repo script:
+  - macOS/Linux: `../convert_video.sh`
+  - Windows: `..\\convert_video.bat`
+- Converter uses high-quality H.264 + AAC and can optionally force 4K output.
 
 ## Run
 

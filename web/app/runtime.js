@@ -28,6 +28,7 @@ export function createRuntime() {
   
   const pointScale = document.getElementById("point-scale");
   const pointOpacity = document.getElementById("point-opacity");
+  const pointSolidness = document.getElementById("point-solidness");
   const pointDepth = document.getElementById("point-depth");
   const edgeOpacity = document.getElementById("edge-opacity");
   const edgeBrightness = document.getElementById("edge-brightness");
@@ -74,6 +75,7 @@ export function createRuntime() {
   const export3dObjBtn = document.getElementById("export-3d-obj");
   const startRecordingBtn = document.getElementById("start-recording");
   const stopRecordingBtn = document.getElementById("stop-recording");
+  const copyMp4CommandBtn = document.getElementById("copy-mp4-command");
   
   const legendTitle = document.querySelector(".legend-title");
   const legendBar = document.getElementById("legend-bar");
@@ -197,6 +199,7 @@ export function createRuntime() {
     connectionUsageMax: 0,
     customPaletteStops: null,
     recording: null,
+    lastRecordedWebmFilename: "",
     recordingAudioGraph: null,
   };
   
@@ -306,6 +309,7 @@ export function createRuntime() {
     freqSpread,
     pointScale,
     pointOpacity,
+    pointSolidness,
     pointDepth,
     edgeOpacity,
     edgeBrightness,
@@ -349,6 +353,7 @@ export function createRuntime() {
     export3dObjBtn,
     startRecordingBtn,
     stopRecordingBtn,
+    copyMp4CommandBtn,
     legendTitle,
     legendBar,
     legendScale,
