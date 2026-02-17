@@ -514,6 +514,7 @@ export function createRenderModule(runtime) {
     const style = edgeStyle?.value || "wave";
     const useWave = style === "wave";
     const useRibbon = style === "ribbon";
+    const lowUseColor = { r: 74, g: 106, b: 236 };
   
     const registerConnectionPulse = (index, amount) => {
       if (index < 0) {
@@ -521,6 +522,30 @@ export function createRenderModule(runtime) {
       }
       const current = state.connectionPulse.get(index) || 0;
       state.connectionPulse.set(index, Math.max(current, amount));
+    };
+
+    const edgeKey = (prefix, a, b) => (a <= b ? `${prefix}:${a}:${b}` : `${prefix}:${b}:${a}`);
+
+    const registerConnectionUsage = (key, activity) => {
+      if (player.paused || !key) {
+        return;
+      }
+      const current = state.connectionUsage.get(key) || 0;
+      const increment = clamp(0.02 + activity * 0.28, 0.01, 0.32);
+      const next = current + increment;
+      state.connectionUsage.set(key, next);
+      if (next > state.connectionUsageMax) {
+        state.connectionUsageMax = next;
+      }
+    };
+
+    const connectionColorByUsage = (baseColor, key, activity) => {
+      const maxUsage = Math.max(0.0001, state.connectionUsageMax || 0);
+      const usage = state.connectionUsage.get(key) || 0;
+      const usageNorm = clamp(usage / maxUsage, 0, 1);
+      const activityBoost = clamp(activity * 0.55, 0, 0.55);
+      const usageMix = clamp(usageNorm * 0.9 + activityBoost, 0, 1);
+      return mixColor(lowUseColor, baseColor, usageMix);
     };
   
     const drawCometSegmentWave = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB, freqFactor) => {
@@ -869,7 +894,10 @@ export function createRenderModule(runtime) {
   
         const alpha = clamp((0.04 + activity * 0.42) * edgeStrength * edgeLightBoost * cinemaBoost * idleVisibility, 0.01, 0.96);
         const width = (0.52 + activity * 2.25) * edgeThicknessBoost;
-        const color = activity > 0.04 ? b.frame.color : { r: 105, g: 118, b: 138 };
+        const baseColor = activity > 0.04 ? b.frame.color : { r: 105, g: 118, b: 138 };
+        const usageKey = edgeKey("t", edgeA, edgeB);
+        registerConnectionUsage(usageKey, activity);
+        const color = connectionColorByUsage(baseColor, usageKey, activity);
         const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
   
         if (useWave) {
@@ -937,6 +965,9 @@ export function createRenderModule(runtime) {
           0.95,
         );
         const width = (0.5 + edge.weight * 1.42 * neighborVisibility + activity * 1.2) * edgeThicknessBoost;
+        const usageKey = edgeKey("k", edge.a, edge.b);
+        registerConnectionUsage(usageKey, activity);
+        const edgeColor = connectionColorByUsage(b.frame.color, usageKey, activity);
         const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
   
         if (useRibbon) {
@@ -945,7 +976,7 @@ export function createRenderModule(runtime) {
             a.y,
             b.x,
             b.y,
-            b.frame.color,
+            edgeColor,
             alpha,
             width,
             edge.a * 0.017 + edge.b * 0.021,
@@ -960,7 +991,7 @@ export function createRenderModule(runtime) {
             a.y,
             b.x,
             b.y,
-            b.frame.color,
+            edgeColor,
             alpha,
             width,
             edge.a * 0.017 + edge.b * 0.021,
@@ -974,7 +1005,7 @@ export function createRenderModule(runtime) {
             a.y,
             b.x,
             b.y,
-            b.frame.color,
+            edgeColor,
             alpha,
             width,
             edge.a * 0.017 + edge.b * 0.021,

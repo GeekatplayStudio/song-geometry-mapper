@@ -193,6 +193,8 @@ export function createRuntime() {
     trailVelocity: 0,
     activationPulse: new Map(),
     connectionPulse: new Map(),
+    connectionUsage: new Map(),
+    connectionUsageMax: 0,
     customPaletteStops: null,
     recording: null,
     recordingAudioGraph: null,

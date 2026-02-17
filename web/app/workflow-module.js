@@ -221,6 +221,8 @@ export function createWorkflowModule(runtime) {
     state.lastPlaybackTime = 0;
     state.trailVelocity = 0;
     state.activationPulse.clear();
+    state.connectionUsage.clear();
+    state.connectionUsageMax = 0;
   }
   
   function setAudioFromFile(file) {

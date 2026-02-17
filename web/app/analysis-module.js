@@ -722,7 +722,7 @@ export function createAnalysisModule(runtime) {
       const value = settings[control.id];
   
       if (control.type === "checkbox") {
-        control.checked = Boolean(value);
+        control.checked = value === true || value === 1 || value === "1" || value === "true";
       } else {
         control.value = String(value);
       }
@@ -757,8 +757,10 @@ export function createAnalysisModule(runtime) {
   function saveCustomPresetStore(store) {
     try {
       window.localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(store));
+      return true;
     } catch (error) {
       console.warn("Could not persist custom presets.", error);
+      return false;
     }
   }
   
@@ -803,7 +805,18 @@ export function createAnalysisModule(runtime) {
       settings: readCurrentControlSettings(),
     };
   
-    saveCustomPresetStore(store);
+    const persisted = saveCustomPresetStore(store);
+    if (!persisted) {
+      setSessionLabel("Preset Save Error", false);
+      return;
+    }
+
+    const verifyStore = loadCustomPresetStore();
+    if (!verifyStore[name]) {
+      setSessionLabel("Preset Save Error", false);
+      return;
+    }
+
     refreshCustomPresetOptions(name);
   
     if (customPresetName) {

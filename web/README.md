@@ -62,6 +62,7 @@ Detailed formulas: `../docs/ALGORITHMS.md`
 
 - temporal edges connect neighboring frames in time
 - kNN edges connect descriptor-nearest frames
+- connection color now reflects usage during playback (rare use = low-frequency blue, frequent use = active color)
 - wave connections are synchronized to playback time (`player.currentTime`)
 - wave frequency blends edge-local descriptor frequency and current active playback frame
 - wave endpoints are pinned to node positions
