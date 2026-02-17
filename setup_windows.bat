@@ -11,7 +11,7 @@ docker --version >nul 2>&1
 if %errorlevel% equ 0 (
     echo [INFO] Docker detected. Setting up Docker environment...
     docker compose build analyzer
-    if %errorlevel% neq 0 (
+    if errorlevel 1 (
         echo [ERROR] Docker build failed.
         pause
         exit /b 1
