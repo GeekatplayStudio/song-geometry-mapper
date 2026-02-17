@@ -18,6 +18,13 @@
 - [ ] Add CI workflow to run Docker-based test command automatically.
 - [ ] Pin dependency versions for stricter reproducibility (optional).
 
+## Phase 2 - Advanced Features (New)
+
+- [x] Web Preview: Add Wave/Straight connection toggle.
+- [x] Analyzer: Add audio stem separation (Demucs) integration.
+- [ ] Web Preview: Advanced camera path editor.
+
+
 ## Phase 2 - TouchDesigner Build Completion
 
 - [ ] Build final `.toe` network from `touchdesigner/README.md` steps.

@@ -57,8 +57,11 @@ python -m bgm.analyze \
   --n_fft 2048 \
   --hop 512 \
   --smooth 5 \
-  --norm zscore
+  --norm zscore \
+  --separate vocals
 ```
+
+*Note: `--separate` requires `demucs` and will isolate the specified stem first.*
 
 ### Optional edges
 

@@ -25,8 +25,11 @@ docker compose run --rm analyzer \
   --n_fft 2048 \
   --hop 512 \
   --smooth 5 \
-  --norm none
+  --norm none \
+  --separate vocals
 ```
+
+*Note: The `--separate` flag supports `vocals`, `drums`, `bass`, `other`, or `accompaniment`. It uses Demucs to isolate the stem before analysis.*
 
 Run web preview:
 

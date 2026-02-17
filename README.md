@@ -18,6 +18,8 @@ Recent visual upgrades in web preview:
 - Hz-aware color mapping (`spectral spread` or `peak frequency`) and custom palette JSON import
 - Dedicated glow intensity/threshold controls for tighter bloom behavior
 - Connection style blending (`Connection Solidness`) from particle trails to solid thin lines
+- **New**: Toggle between `Wave` (organic) and `Straight` connection styles
+- **New**: Audio stem separation (isolating vocals, drums, bass, etc.) before analysis
 
 ## Quick Install (No Global Side Effects)
 

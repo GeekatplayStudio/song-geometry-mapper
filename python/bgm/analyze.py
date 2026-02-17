@@ -15,8 +15,17 @@ from .features import (
 from .normalize import NORMALIZATION_CHOICES, normalize_dataframe, smooth_dataframe
 from .schema import column_min_max, validate_feature_schema
 
+
+try:
+    from .separate import separate_audio
+    HAS_DEMUCS = True
+except ImportError:
+    HAS_DEMUCS = False   
+
 EXCLUDED_COLUMNS = ("t_seconds", "frame_index")
 EDGE_MODES = ("none", "temporal", "knn")
+SEPARATION_TARGETS = ("vocals", "accompaniment", "drums", "bass", "other")
+
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -56,6 +65,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=list(KNN_DEFAULT_COLUMNS),
         help="Descriptor columns used for kNN edges",
     )
+    if HAS_DEMUCS:
+        parser.add_argument(
+            "--separate",
+            default=None,
+            choices=SEPARATION_TARGETS,
+            help="Separate and analyze specific stem (requires demucs)",
+        )
     return parser.parse_args(argv)
 
 
@@ -71,12 +87,33 @@ def analyze_to_outputs(
     edge_mode: str = "none",
     knn_n: int = 3,
     knn_columns: list[str] | None = None,
+    separate: str | None = None,
+    # separation parameters
 ) -> dict[str, Path | None]:
     output_dir = Path(outdir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    analysis_input = Path(input_path)
+    stem_info = None
+
+    if separate and HAS_DEMUCS:
+        print(f"Demucs separation requested for stem: {separate}...")
+        try:
+             # Stems are stored in a dedicated folder to keep output organized
+            stems_dir = output_dir / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            
+            # This call will block until separation is complete
+            separated_file = separate_audio(input_path, stems_dir, stem=separate, model="htdemucs")
+            analysis_input = separated_file
+            stem_info = separate
+            print(f"Analyzing separated stem: {separated_file}")
+
+        except Exception as e:
+            print(f"Warning: Separation failed ({e}). Falling back to original audio.")
+
     # Keep the pipeline deterministic for repeatable visual geometry exports.
-    features, audio_meta = extract_frame_features(input_path, sr=sr, n_fft=n_fft, hop_length=hop)
+    features, audio_meta = extract_frame_features(analysis_input, sr=sr, n_fft=n_fft, hop_length=hop)
     features = smooth_dataframe(features, window=smooth, exclude=EXCLUDED_COLUMNS)
     features = normalize_dataframe(features, method=norm, exclude=EXCLUDED_COLUMNS)
     validate_feature_schema(features)
@@ -121,6 +158,7 @@ def analyze_to_outputs(
             "edge_mode": edge_mode,
             "knn_n": knn_n,
             "knn_columns": knn_columns or list(KNN_DEFAULT_COLUMNS),
+            "separated_stem": stem_info,
         },
         "audio": audio_meta,
         "columns": column_min_max(features),
@@ -142,6 +180,10 @@ def analyze_to_outputs(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    
+    # Handle optional separate argument if demucs is installed
+    separate_arg = getattr(args, 'separate', None)
+
     output_paths = analyze_to_outputs(
         args.input,
         args.outdir,
@@ -153,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         edge_mode=args.edge_mode,
         knn_n=args.knn_n,
         knn_columns=args.knn_columns,
+        separate=separate_arg,
     )
     print(f"Wrote {output_paths['features_csv']}")
     print(f"Wrote {output_paths['features_json']}")
