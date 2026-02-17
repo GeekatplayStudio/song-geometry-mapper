@@ -28,6 +28,7 @@ const mappingMode = document.getElementById("mapping-mode");
 const cameraPreset = document.getElementById("camera-preset");
 const dragMode = document.getElementById("drag-mode");
 const edgeMode = document.getElementById("edge-mode");
+const edgeStyle = document.getElementById("edge-style");
 const displayDecimation = document.getElementById("display-decimation");
 const knnNeighbors = document.getElementById("knn-neighbors");
 const knnBoost = document.getElementById("knn-boost");
@@ -1724,6 +1725,100 @@ function drawEdges(byIndex, activeIndex, nowSec) {
     state.connectionPulse.set(index, Math.max(current, amount));
   };
 
+  const drawCometSegmentWave = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB, freqFactor) => {
+    const phase = (nowSec * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
+    const lenRatio = clamp(trailLength * (0.45 + activity * 0.9), 0.16, 1);
+    const t1 = phase;
+    const t0 = Math.max(0, t1 - lenRatio);
+
+    if (t1 <= 0.001) return;
+
+    const dx = bx - ax;
+    const dy = by - ay;
+    const dist = Math.hypot(dx, dy) || 1;
+    const nx = dx / dist;
+    const ny = dy / dist;
+    // Perpendicular vector
+    const px = -ny;
+    const py = nx;
+
+    // Wave properties based on frequency factor (0-1)
+    const waveFreq = 1.5 + freqFactor * 8.0; 
+    const waveAmp = Math.min(dist * 0.15, 3.5 + activity * 4.0);
+    const waveSpeed = 1.2 + Number(motionStrength.value) * 1.5;
+    
+    // Draw function helper
+    const getWavePoint = (t) => {
+        const lx = ax + dx * t;
+        const ly = ay + dy * t;
+        // Envelope: tapered sine window sin(t*PI) to pin ends
+        const envelope = Math.sin(t * Math.PI);
+        const angle = t * Math.PI * 2 * waveFreq + (nowSec * waveSpeed); // Animated wave
+        const offset = Math.sin(angle) * waveAmp * envelope;
+        return {
+            x: lx + px * offset,
+            y: ly + py * offset
+        };
+    };
+
+    const tailColor = shiftToInfra(color, clamp(glowShiftAmt * (0.22 + (1 - activity) * 0.5), 0, 1));
+    const backboneAlpha = clamp(alpha * (0.08 + solidness * (0.62 + tailFade * 0.16)), 0.006, 0.56);
+    
+    // Draw full wave backbone
+    ctx.strokeStyle = rgba(tailColor, backboneAlpha.toFixed(3));
+    ctx.lineWidth = Math.max(0.24, 0.34 + width * (0.16 + solidness * 0.08));
+    ctx.beginPath();
+    const steps = Math.max(12, Math.floor(dist / 3));
+    for (let i = 0; i <= steps; i++) {
+        const p = getWavePoint(i / steps);
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+
+    // Draw active comet segment
+    // Using gradient along the wave path is tricky with native canvas gradient (which is linear/radial)
+    // We can approximate by taking start/end of the *straight* segment for the gradient vector
+    const pStart = getWavePoint(t0);
+    const pEnd = getWavePoint(t1);
+    
+    // Linear gradient roughly follows the flow, though not perfectly along the curve
+    const x0 = lerp(ax, bx, t0);
+    const y0 = lerp(ay, by, t0);
+    const x1 = lerp(ax, bx, t1);
+    const y1 = lerp(ay, by, t1);
+    
+    const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+    const particleMix = clamp(1.08 - solidness * 0.86, 0.16, 1.08);
+    grad.addColorStop(0, rgba(tailColor, clamp(alpha * (0.06 + tailFade * 0.1) * particleMix, 0.004, 0.22).toFixed(3)));
+    grad.addColorStop(0.55, rgba(color, clamp(alpha * (0.22 + tailFade * 0.24) * particleMix, 0.008, 0.56).toFixed(3)));
+    grad.addColorStop(1, rgba(color, clamp(alpha * 1.12 * particleMix, 0.03, 0.98).toFixed(3)));
+
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = Math.max(0.32, width * (0.86 - solidness * 0.34));
+    
+    ctx.beginPath();
+    // Only draw the segment [t0, t1]
+    const subSteps = Math.ceil(steps * (t1 - t0));
+    const safeSubSteps = Math.max(4, subSteps);
+    
+    for (let i = 0; i <= safeSubSteps; i++) {
+        const localT = i / safeSubSteps; // 0 to 1
+        const t = t0 + localT * (t1 - t0); // t0 to t1
+        const p = getWavePoint(t);
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+
+    if (t1 > 0.94) {
+      registerConnectionPulse(edgeB, clamp(activity * Number(nodeHitPulse.value), 0, 2.8));
+    }
+    if (t0 < 0.06) {
+      registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
+    }
+  };
+
   const drawCometSegmentLine = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB) => {
     const phase = (nowSec * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
     const len = clamp(trailLength * (0.45 + activity * 0.9), 0.16, 1);
@@ -1879,7 +1974,15 @@ function drawEdges(byIndex, activeIndex, nowSec) {
       );
       const width = 0.5 + edge.weight * 1.42 * neighborVisibility + activity * 1.2;
 
-      drawCometSegmentLine(a.x, a.y, b.x, b.y, b.frame.color, alpha, width, edge.a * 0.017 + edge.b * 0.021, activity, edge.a, edge.b);
+      // Use Wave drawing for connections to represent frequency
+      const freqFactor = (a.frame.centroidN + b.frame.centroidN) * 0.5;
+      
+      if (edgeStyle && edgeStyle.value === "line") {
+        drawCometSegmentLine(a.x, a.y, b.x, b.y, b.frame.color, alpha, width, edge.a * 0.017 + edge.b * 0.021, activity, edge.a, edge.b);
+      } else {
+        // We pass the new helper instead of the line helper
+        drawCometSegmentWave(a.x, a.y, b.x, b.y, b.frame.color, alpha, width, edge.a * 0.017 + edge.b * 0.021, activity, edge.a, edge.b, freqFactor);
+      }
     }
   }
 
@@ -2519,27 +2622,33 @@ function stopRecording() {
 }
 
 function bindEvents() {
-  function updateOffsetLabel(input, label) {
-    label.textContent = input.value;
-  }
+    function updateOffsetLabel(input, label) {
+        label.textContent = input.value;
+    }
 
-  offsetX.addEventListener("input", () => updateOffsetLabel(offsetX, valOffsetX));
-  offsetY.addEventListener("input", () => updateOffsetLabel(offsetY, valOffsetY));
-  offsetZ.addEventListener("input", () => updateOffsetLabel(offsetZ, valOffsetZ));
+    if (offsetX && valOffsetX) {
+        offsetX.addEventListener("input", () => updateOffsetLabel(offsetX, valOffsetX));
+        offsetY.addEventListener("input", () => updateOffsetLabel(offsetY, valOffsetY));
+        offsetZ.addEventListener("input", () => updateOffsetLabel(offsetZ, valOffsetZ));
+    }
 
-  helpBtn.addEventListener("click", () => {
-      helpModal.setAttribute("aria-hidden", "false");
-  });
+    if (helpBtn && helpModal) {
+        helpBtn.addEventListener("click", () => {
+            helpModal.setAttribute("aria-hidden", "false");
+        });
+        
+        if (closeHelpBtn) {
+            closeHelpBtn.addEventListener("click", () => {
+                helpModal.setAttribute("aria-hidden", "true");
+            });
+        }
 
-  closeHelpBtn.addEventListener("click", () => {
-      helpModal.setAttribute("aria-hidden", "true");
-  });
-
-  window.addEventListener("click", (e) => {
-      if (e.target === helpModal) {
-          helpModal.setAttribute("aria-hidden", "true");
-      }
-  });
+        window.addEventListener("click", (e) => {
+            if (e.target === helpModal) {
+                helpModal.setAttribute("aria-hidden", "true");
+            }
+        });
+    }
 
   fileInput.addEventListener("change", (event) => {
     const [file] = event.target.files;
