@@ -110,6 +110,14 @@ Time Spine equations used in renderer:
 3. Connection styles
 - `line`: straight comet-like segment
 - `wave`: sinusoidal edge shape synchronized to playback time and frequency mix
+- `ribbon`: fluid ribbon strips with traveling light-wave highlights
+
+## UI Focus Mode
+
+- Use the lower-right circle toggle:
+  - `H` = hide overlays (HUD, legend, controls) for fullscreen display-only view
+  - `S` = show overlays again
+- The main visualization remains visible while UI windows are hidden.
 
 ## Script Guide
 

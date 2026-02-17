@@ -25,7 +25,19 @@
             <div><span>Centroid</span><strong id="metric-centroid">0 Hz</strong></div>
             <div><span>Spread</span><strong id="metric-spread">0.00 kHz</strong></div>
           </div>
-          <button id="help-btn" class="btn btn-sm" type="button" aria-label="About">About</button>
+          <div class="status-actions">
+            <button id="help-btn" class="btn btn-sm" type="button" aria-label="About">About</button>
+            <a
+              id="support-vlad-btn"
+              class="btn btn-sm support-btn"
+              href="https://geekatplay.gumroad.com/coffee"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Support Vlad"
+            >
+              Support Vlad
+            </a>
+          </div>
         </div>
       </header>
 
@@ -37,7 +49,7 @@
             <div class="help-logo">3D</div>
             <div class="help-title">
                 <h2>Song Geometry Mapper</h2>
-                <p>Version 1.2.0 &bull; Geekatplay Studio</p>
+              <p>Version 1.3.0 &bull; Geekatplay Studio</p>
             </div>
           </div>
 
@@ -271,6 +283,7 @@
               <select id="edge-style">
                 <option value="wave" selected>Wave</option>
                 <option value="line">Straight</option>
+                <option value="ribbon">Ribbon</option>
               </select>
             </label>
             <label>
@@ -280,6 +293,22 @@
             <label>
               Connection Brightness <span class="info-icon" data-tooltip="Boost perceived brightness of all node connections"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
               <input id="edge-brightness" type="range" min="0.4" max="3" value="1" step="0.05" />
+            </label>
+            <label>
+              Connection Width Boost <span class="info-icon" data-tooltip="Increase thickness of all node connections"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
+              <input id="edge-width-boost" type="range" min="0.6" max="3" value="1" step="0.05" />
+            </label>
+            <label>
+              Ribbon Softness <span class="info-icon" data-tooltip="Soft feathering for ribbon edges and glow"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
+              <input id="edge-ribbon-softness" type="range" min="0" max="1" value="0.55" step="0.01" />
+            </label>
+            <label>
+              Ribbon Wave Speed <span class="info-icon" data-tooltip="Speed of light-wave travel along ribbons"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
+              <input id="edge-ribbon-wave-speed" type="range" min="0.2" max="3" value="1" step="0.05" />
+            </label>
+            <label>
+              Ribbon Flexibility <span class="info-icon" data-tooltip="How strongly ribbons bend and follow music wave shapes"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
+              <input id="edge-ribbon-flexibility" type="range" min="0.2" max="3" value="1" step="0.05" />
             </label>
             <label>
               Connection Solidness <span class="info-icon" data-tooltip="Make lines appear more solid or dashed"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
@@ -310,6 +339,10 @@
             <label>
               Flow Density <span class="info-icon" data-tooltip="Volume of particles flowing through lines"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
               <input id="flow-density" type="range" min="0" max="1" value="0.7" step="0.01" />
+            </label>
+            <label>
+              Show Flow Arrows <span class="info-icon" data-tooltip="Show/hide small moving arrow streaks on connections"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
+              <input id="show-flow-arrows" type="checkbox" checked />
             </label>
             <label>
               Activation Pulse <span class="info-icon" data-tooltip="Flash intensity when a point activates"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
@@ -442,6 +475,16 @@
           <span class="tab-full">Post FX</span>
         </button>
       </nav>
+
+      <button
+        id="focus-toggle"
+        class="focus-toggle"
+        type="button"
+        aria-label="Hide UI overlays"
+        title="Hide UI overlays"
+      >
+        H
+      </button>
     </main>
 
     <script type="module" src="./app.js"></script>

@@ -35,6 +35,8 @@ const {
   startRecordingBtn,
   stopRecordingBtn,
   helpBtn,
+  supportVladBtn,
+  focusToggleBtn,
   helpModal,
   closeHelpBtn,
   voiceCacheDir,
@@ -81,7 +83,41 @@ const {
   drawTrail,
   drawMap,
   updateLegend,
+  getFrameIndexAtTime,
 } = runtime;
+
+function updateSupportButtonTheme(nowSec) {
+  if (!supportVladBtn) {
+    return;
+  }
+
+  let r = 96;
+  let g = 140;
+  let b = 240;
+  let glowAlpha = 0.24;
+
+  if (state.map && state.map.frames.length > 0) {
+    const activeIndex = player.src ? getFrameIndexAtTime(player.currentTime) : -1;
+    const frame = activeIndex >= 0 ? state.map.frames[activeIndex] : state.map.frames[0];
+
+    if (frame?.color) {
+      r = frame.color.r;
+      g = frame.color.g;
+      b = frame.color.b;
+      glowAlpha = clamp(0.2 + (frame.rmsN || 0) * 0.38, 0.2, 0.56);
+    }
+  }
+
+  const hiR = Math.round(clamp(r * 0.86 + 48, 0, 255));
+  const hiG = Math.round(clamp(g * 0.86 + 48, 0, 255));
+  const hiB = Math.round(clamp(b * 0.86 + 48, 0, 255));
+  const intensity = 0.86;
+
+  supportVladBtn.style.background = `linear-gradient(115deg, rgba(${hiR}, ${hiG}, ${hiB}, ${(0.24 * intensity).toFixed(3)}), rgba(${r}, ${g}, ${b}, ${(0.2 * intensity).toFixed(3)}))`;
+  supportVladBtn.style.borderColor = `rgba(${hiR}, ${hiG}, ${hiB}, ${(0.62 * intensity).toFixed(3)})`;
+  supportVladBtn.style.color = "#ecf6ff";
+  supportVladBtn.style.boxShadow = `0 0 14px rgba(${r}, ${g}, ${b}, ${(glowAlpha * intensity).toFixed(3)})`;
+}
 
 function bindEvents() {
   const VOICE_CACHE_DIR_KEY = "sgm.voice-cache-dir";
@@ -95,6 +131,22 @@ function bindEvents() {
       ? `Cache output: ${path}`
       : "Cache output: default temp folder";
   }
+
+  let focusMode = false;
+  const setFocusMode = (enabled) => {
+    focusMode = Boolean(enabled);
+    document.body.classList.toggle("focus-mode", focusMode);
+
+    if (focusToggleBtn) {
+      focusToggleBtn.textContent = focusMode ? "S" : "H";
+      focusToggleBtn.setAttribute("aria-label", focusMode ? "Show UI overlays" : "Hide UI overlays");
+      focusToggleBtn.setAttribute("title", focusMode ? "Show UI overlays" : "Hide UI overlays");
+    }
+
+    if (focusMode && helpModal) {
+      helpModal.setAttribute("aria-hidden", "true");
+    }
+  };
 
     function updateOffsetLabel(input, label) {
         label.textContent = input.value;
@@ -130,6 +182,12 @@ function bindEvents() {
   }
 
   refreshVoiceCacheStatus();
+
+  if (focusToggleBtn) {
+    focusToggleBtn.addEventListener("click", () => setFocusMode(!focusMode));
+  }
+
+  setFocusMode(false);
 
     if (offsetX && valOffsetX) {
         offsetX.addEventListener("input", () => updateOffsetLabel(offsetX, valOffsetX));
@@ -329,6 +387,7 @@ function tick(nowMs) {
   state.lastFrameAt = nowMs;
 
   const nowSec = nowMs * 0.001;
+  updateSupportButtonTheme(nowSec);
   updateCameraMotion(nowSec, dtMs);
 
   drawBackground(nowSec);

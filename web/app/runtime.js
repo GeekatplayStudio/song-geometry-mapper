@@ -31,6 +31,10 @@ export function createRuntime() {
   const pointDepth = document.getElementById("point-depth");
   const edgeOpacity = document.getElementById("edge-opacity");
   const edgeBrightness = document.getElementById("edge-brightness");
+  const edgeWidthBoost = document.getElementById("edge-width-boost");
+  const edgeRibbonSoftness = document.getElementById("edge-ribbon-softness");
+  const edgeRibbonWaveSpeed = document.getElementById("edge-ribbon-wave-speed");
+  const edgeRibbonFlexibility = document.getElementById("edge-ribbon-flexibility");
   const edgeSolidness = document.getElementById("edge-solidness");
   const edgeTrailLength = document.getElementById("edge-trail-length");
   const edgeTailFade = document.getElementById("edge-tail-fade");
@@ -38,6 +42,7 @@ export function createRuntime() {
   const trailPersistence = document.getElementById("trail-persistence");
   const trailFlare = document.getElementById("trail-flare");
   const flowDensity = document.getElementById("flow-density");
+  const showFlowArrows = document.getElementById("show-flow-arrows");
   const pulseStrength = document.getElementById("pulse-strength");
   const nodeHitPulse = document.getElementById("node-hit-pulse");
   const motionStrength = document.getElementById("motion-strength");
@@ -75,6 +80,8 @@ export function createRuntime() {
   const legendScale = document.getElementById("legend-scale");
   
   const helpBtn = document.getElementById("help-btn");
+  const supportVladBtn = document.getElementById("support-vlad-btn");
+  const focusToggleBtn = document.getElementById("focus-toggle");
   const helpModal = document.getElementById("help-modal");
   const closeHelpBtn = document.getElementById("close-help");
   
@@ -300,6 +307,10 @@ export function createRuntime() {
     pointDepth,
     edgeOpacity,
     edgeBrightness,
+    edgeWidthBoost,
+    edgeRibbonSoftness,
+    edgeRibbonWaveSpeed,
+    edgeRibbonFlexibility,
     edgeSolidness,
     edgeTrailLength,
     edgeTailFade,
@@ -307,6 +318,7 @@ export function createRuntime() {
     trailPersistence,
     trailFlare,
     flowDensity,
+    showFlowArrows,
     pulseStrength,
     nodeHitPulse,
     motionStrength,
@@ -339,6 +351,8 @@ export function createRuntime() {
     legendBar,
     legendScale,
     helpBtn,
+    supportVladBtn,
+    focusToggleBtn,
     helpModal,
     closeHelpBtn,
     nodesOnly,

@@ -18,6 +18,7 @@ export function createRenderModule(runtime) {
     trailPersistence,
     edgeTailFade,
     flowDensity,
+    showFlowArrows,
     motionStrength,
     rotationSpeed,
     cameraPreset,
@@ -34,6 +35,10 @@ export function createRenderModule(runtime) {
     edgeStyle,
     edgeOpacity,
     edgeBrightness,
+    edgeWidthBoost,
+    edgeRibbonSoftness,
+    edgeRibbonWaveSpeed,
+    edgeRibbonFlexibility,
     edgeSolidness,
     edgeTrailLength,
     waveAmplification,
@@ -427,6 +432,10 @@ export function createRenderModule(runtime) {
   }
   
   function drawFlowParticles(activeIndex, nowSec) {
+    if (!showFlowArrows?.checked) {
+      return;
+    }
+
     if (!state.map || player.paused || activeIndex < 2) {
       return;
     }
@@ -491,6 +500,7 @@ export function createRenderModule(runtime) {
     const mode = edgeMode.value;
     const edgeStrength = Number(edgeOpacity.value);
     const edgeLightBoost = Number(edgeBrightness?.value || 1);
+    const edgeThicknessBoost = Number(edgeWidthBoost?.value || 1);
     const trailLength = Number(edgeTrailLength.value);
     const tailFade = Number(edgeTailFade.value);
     const solidness = Number(edgeSolidness.value);
@@ -501,7 +511,9 @@ export function createRenderModule(runtime) {
     const idleVisibility = activeIndex < 0 ? 0.52 : 1;
     const playbackTime = !player.paused ? player.currentTime : nowSec;
     const liveFrame = getInterpolatedFrameAtTime(playbackTime);
-    const useWave = edgeStyle?.value === "wave";
+    const style = edgeStyle?.value || "wave";
+    const useWave = style === "wave";
+    const useRibbon = style === "ribbon";
   
     const registerConnectionPulse = (index, amount) => {
       if (index < 0) {
@@ -704,6 +716,138 @@ export function createRenderModule(runtime) {
         registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
       }
     };
+
+    const drawCometSegmentRibbon = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB, freqFactor) => {
+      const phase = (playbackTime * (0.62 + Number(motionStrength.value) * 0.22) + phaseSeed) % 1;
+      const lenRatio = clamp(trailLength * (0.42 + activity * 0.98), 0.14, 1);
+      const t1 = phase;
+      const t0 = Math.max(0, t1 - lenRatio);
+
+      if (t1 <= 0.001) {
+        return;
+      }
+
+      const dx = bx - ax;
+      const dy = by - ay;
+      const dist = Math.hypot(dx, dy) || 1;
+      const nx = dx / dist;
+      const ny = dy / dist;
+      const px = -ny;
+      const py = nx;
+
+      const waveFreq = 0.95 + freqFactor * 7.6;
+      const waveAmpBoost = Number(waveAmplification?.value || 1);
+      const ribbonWaveSpeedBoost = Number(edgeRibbonWaveSpeed?.value || 1);
+      const ribbonFlexibility = Number(edgeRibbonFlexibility?.value || 1);
+      const musicShape = clamp(
+        ((liveFrame?.peakN ?? freqFactor) * 0.64 + (liveFrame?.centroidN ?? freqFactor) * 0.36),
+        0,
+        1,
+      );
+      const adaptiveFreq = waveFreq * (0.78 + musicShape * (0.55 + ribbonFlexibility * 0.24));
+      const waveAmp = Math.min(
+        dist * 0.24,
+        (0.8 + freqFactor * (2.4 + ribbonFlexibility * 1.4))
+          * (0.28 + activity * (0.78 + ribbonFlexibility * 0.35))
+          * waveAmpBoost,
+      );
+      const waveSpeed = (0.35 + freqFactor * 1.7 + Number(motionStrength.value) * 0.44) * ribbonWaveSpeedBoost;
+      const ribbonHalfWidth = Math.max(1.05, width * (0.74 + activity * 0.86));
+      const ribbonSoftness = Number(edgeRibbonSoftness?.value || 0.55);
+
+      const centerPoint = (t) => {
+        const lx = ax + dx * t;
+        const ly = ay + dy * t;
+        const envelope = Math.sin(t * Math.PI);
+        const bendBias = Math.sin(playbackTime * (0.7 + adaptiveFreq * 0.14) + t * Math.PI * 2) * ribbonFlexibility * (0.2 + musicShape * 0.5);
+        const angle = t * Math.PI * 2 * adaptiveFreq + playbackTime * waveSpeed * Math.PI * 2 + bendBias;
+        const offset = Math.sin(angle) * waveAmp * envelope;
+        return {
+          x: lx + px * offset,
+          y: ly + py * offset,
+          envelope,
+        };
+      };
+
+      const tailColor = shiftToInfra(color, clamp(glowShiftAmt * (0.18 + (1 - activity) * 0.5), 0, 1));
+      const steps = Math.max(14, Math.floor(dist / 3.2));
+      const top = [];
+      const bottom = [];
+
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        const cp = centerPoint(t);
+        const thickness = ribbonHalfWidth * (0.6 + cp.envelope * (0.8 + activity * 0.3));
+        top.push({ x: cp.x + px * thickness, y: cp.y + py * thickness });
+        bottom.push({ x: cp.x - px * thickness, y: cp.y - py * thickness });
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(top[0].x, top[0].y);
+      for (let i = 1; i < top.length; i += 1) {
+        ctx.lineTo(top[i].x, top[i].y);
+      }
+      for (let i = bottom.length - 1; i >= 0; i -= 1) {
+        ctx.lineTo(bottom[i].x, bottom[i].y);
+      }
+      ctx.closePath();
+      const fillAlpha = clamp(alpha * (0.09 + solidness * 0.34) * (1 - ribbonSoftness * 0.38), 0.012, 0.62);
+      ctx.fillStyle = rgba(tailColor, fillAlpha.toFixed(3));
+      ctx.fill();
+
+      ctx.strokeStyle = rgba(color, clamp(alpha * (0.16 + ribbonSoftness * 0.18), 0.02, 0.6).toFixed(3));
+      ctx.lineWidth = Math.max(0.8, ribbonHalfWidth * (0.65 + ribbonSoftness * 1.15));
+      ctx.beginPath();
+      ctx.moveTo(top[0].x, top[0].y);
+      for (let i = 1; i < top.length; i += 1) {
+        ctx.lineTo(top[i].x, top[i].y);
+      }
+      for (let i = bottom.length - 1; i >= 0; i -= 1) {
+        ctx.lineTo(bottom[i].x, bottom[i].y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+
+      const activeStart = centerPoint(t0);
+      const activeEnd = centerPoint(t1);
+      const activeGrad = ctx.createLinearGradient(activeStart.x, activeStart.y, activeEnd.x, activeEnd.y);
+      activeGrad.addColorStop(0, rgba(tailColor, clamp(alpha * 0.08, 0.012, 0.24).toFixed(3)));
+      activeGrad.addColorStop(0.58, rgba(color, clamp(alpha * 0.34, 0.03, 0.72).toFixed(3)));
+      activeGrad.addColorStop(1, rgba(color, clamp(alpha * 1.12, 0.05, 0.98).toFixed(3)));
+
+      ctx.strokeStyle = activeGrad;
+      ctx.lineWidth = Math.max(0.8, ribbonHalfWidth * 0.7);
+      ctx.beginPath();
+      const waveSteps = Math.max(6, Math.ceil((t1 - t0) * steps));
+      for (let i = 0; i <= waveSteps; i += 1) {
+        const t = t0 + (i / waveSteps) * (t1 - t0);
+        const cp = centerPoint(t);
+        if (i === 0) {
+          ctx.moveTo(cp.x, cp.y);
+        } else {
+          ctx.lineTo(cp.x, cp.y);
+        }
+      }
+      ctx.stroke();
+
+      const lightBandT = (phase + 0.12) % 1;
+      const lightBand = centerPoint(lightBandT);
+      const glowRadius = ribbonHalfWidth * (1.9 + ribbonSoftness * 1.4);
+      const glow = ctx.createRadialGradient(lightBand.x, lightBand.y, 0, lightBand.x, lightBand.y, glowRadius);
+      glow.addColorStop(0, rgba(color, clamp(alpha * 1.2, 0.12, 0.95).toFixed(3)));
+      glow.addColorStop(1, rgba(color, 0));
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(lightBand.x, lightBand.y, glowRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (t1 > 0.94) {
+        registerConnectionPulse(edgeB, clamp(activity * Number(nodeHitPulse.value), 0, 2.8));
+      }
+      if (t0 < 0.06) {
+        registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
+      }
+    };
   
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
@@ -724,12 +868,27 @@ export function createRenderModule(runtime) {
         );
   
         const alpha = clamp((0.04 + activity * 0.42) * edgeStrength * edgeLightBoost * cinemaBoost * idleVisibility, 0.01, 0.96);
-        const width = 0.52 + activity * 2.25;
+        const width = (0.52 + activity * 2.25) * edgeThicknessBoost;
         const color = activity > 0.04 ? b.frame.color : { r: 105, g: 118, b: 138 };
         const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
   
         if (useWave) {
           drawCometSegmentWave(
+            a.x,
+            a.y,
+            b.x,
+            b.y,
+            color,
+            alpha,
+            width,
+            edgeA * 0.019 + edgeB * 0.013,
+            activity,
+            edgeA,
+            edgeB,
+            freqFactor,
+          );
+        } else if (useRibbon) {
+          drawCometSegmentRibbon(
             a.x,
             a.y,
             b.x,
@@ -777,10 +936,25 @@ export function createRenderModule(runtime) {
           0.008,
           0.95,
         );
-        const width = 0.5 + edge.weight * 1.42 * neighborVisibility + activity * 1.2;
+        const width = (0.5 + edge.weight * 1.42 * neighborVisibility + activity * 1.2) * edgeThicknessBoost;
         const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
   
-        if (!useWave) {
+        if (useRibbon) {
+          drawCometSegmentRibbon(
+            a.x,
+            a.y,
+            b.x,
+            b.y,
+            b.frame.color,
+            alpha,
+            width,
+            edge.a * 0.017 + edge.b * 0.021,
+            activity,
+            edge.a,
+            edge.b,
+            freqFactor,
+          );
+        } else if (!useWave) {
           drawCometSegmentLine(
             a.x,
             a.y,

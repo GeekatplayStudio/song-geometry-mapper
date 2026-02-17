@@ -175,6 +175,64 @@ h1 {
   color: #f1f7ff;
 }
 
+.status-actions {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.status-actions .btn {
+  padding: 7px 10px;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.status-actions a.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.support-btn {
+  border-color: rgba(255, 255, 255, 0.26);
+  color: #eaf5ff;
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease;
+}
+
+.focus-toggle {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 80;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  background: rgba(7, 13, 21, 0.88);
+  color: #ecf6ff;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.44);
+}
+
+body.focus-mode .hud-top,
+body.focus-mode .legend,
+body.focus-mode .control-drawer,
+body.focus-mode .tabs-dock {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .legend {
   position: absolute;
   left: clamp(14px, 2vw, 26px);

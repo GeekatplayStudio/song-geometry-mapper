@@ -41,8 +41,10 @@ It can analyze audio in-browser or load backend-generated features for playback-
 - edge styles:
   - `Wave` (playback/frequency-synced)
   - `Straight`
+  - `Ribbon` (fluid strip + traveling light wave)
 - reactive trails, glow, fog, pulse, and flow particles
 - `Wave Amplification` control boosts wave-edge amplitude when motion is too subtle
+- lower-right `H/S` focus toggle hides/restores all overlay windows for fullscreen display mode
 - camera presets plus manual orbit/pan/zoom
 - palette system with built-in and custom JSON palettes
 
