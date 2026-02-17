@@ -26,10 +26,10 @@ docker compose run --rm analyzer \
   --hop 512 \
   --smooth 5 \
   --norm none \
-  --separate vocals
+  --separate vocals drums
 ```
 
-*Note: The `--separate` flag supports `vocals`, `drums`, `bass`, `other`, or `accompaniment`. It uses Demucs to isolate the stem before analysis.*
+*Note: The `--separate` flag supports multiple values: `vocals`, `drums`, `bass`, `other`, or `all`. The analyzer will process the full song (default) AND the requested stems (in subdirectories).*
 
 Run web preview:
 

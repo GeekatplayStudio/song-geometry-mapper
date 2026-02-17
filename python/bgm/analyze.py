@@ -24,7 +24,8 @@ except ImportError:
 
 EXCLUDED_COLUMNS = ("t_seconds", "frame_index")
 EDGE_MODES = ("none", "temporal", "knn")
-SEPARATION_TARGETS = ("vocals", "accompaniment", "drums", "bass", "other")
+SEPARATION_TARGETS = ("vocals", "accompaniment", "drums", "bass", "other", "all")
+
 
 
 
@@ -69,8 +70,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.add_argument(
             "--separate",
             default=None,
+            nargs="+",
             choices=SEPARATION_TARGETS,
-            help="Separate and analyze specific stem (requires demucs)",
+            help="Separate and analyze specific stems (requires demucs). Use 'all' for all 4 stems.",
         )
     return parser.parse_args(argv)
 
@@ -183,8 +185,29 @@ def main(argv: list[str] | None = None) -> int:
     
     # Handle optional separate argument if demucs is installed
     separate_arg = getattr(args, 'separate', None)
+    
+    # If no separation requested, run once (standard behavior)
+    if not separate_arg:
+        output_paths = analyze_to_outputs(
+            args.input,
+            args.outdir,
+            sr=args.sr,
+            n_fft=args.n_fft,
+            hop=args.hop,
+            smooth=args.smooth,
+            norm=args.norm,
+            edge_mode=args.edge_mode,
+            knn_n=args.knn_n,
+            knn_columns=args.knn_columns,
+            separate=None,
+        )
+        print(f"Wrote {output_paths['features_csv']}")
+        return 0
 
-    output_paths = analyze_to_outputs(
+    # If separation is requested, we process multiple runs
+    # 1. First, always analyze the full mix (the "addition not replacement" requirement)
+    print("--- Analyzing Full Mix ---")
+    base_out = analyze_to_outputs(
         args.input,
         args.outdir,
         sr=args.sr,
@@ -195,13 +218,39 @@ def main(argv: list[str] | None = None) -> int:
         edge_mode=args.edge_mode,
         knn_n=args.knn_n,
         knn_columns=args.knn_columns,
-        separate=separate_arg,
+        separate=None,
     )
-    print(f"Wrote {output_paths['features_csv']}")
-    print(f"Wrote {output_paths['features_json']}")
-    print(f"Wrote {output_paths['metadata_json']}")
-    if args.edge_mode != "none":
-        print(f"Wrote {output_paths['edges_csv']}")
+    print(f"Full mix analysis complete: {base_out['features_csv']}")
+
+    # Determine which stems to process
+    targets = []
+    if "all" in separate_arg:
+        targets = ["vocals", "drums", "bass", "other"]
+    else:
+        targets = separate_arg
+
+    for stem in targets:
+        print(f"\n--- Analyzing Stem: {stem} ---")
+        # For stems, we write to a subdirectory to avoid overwriting the main features.csv
+        # or confusing the web app which expects specific filenames.
+        stem_outdir = Path(args.outdir) / stem
+        stem_outdir.mkdir(parents=True, exist_ok=True)
+        
+        stem_out = analyze_to_outputs(
+            args.input,
+            stem_outdir,
+            sr=args.sr,
+            n_fft=args.n_fft,
+            hop=args.hop,
+            smooth=args.smooth,
+            norm=args.norm,
+            edge_mode=args.edge_mode,
+            knn_n=args.knn_n,
+            knn_columns=args.knn_columns,
+            separate=stem,
+        )
+        print(f"Stem '{stem}' analysis complete: {stem_out['features_csv']}")
+
     return 0
 
 

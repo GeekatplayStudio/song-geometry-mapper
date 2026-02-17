@@ -11,7 +11,13 @@ def test_separate_arg_parsing() -> None:
 
     # If demucs is installed, it should parse correctly
     args = parse_args(["--input", "in.wav", "--outdir", "out", "--separate", "vocals"])
-    assert args.separate == "vocals"
+    assert args.separate == ["vocals"]
+
+    args_multi = parse_args(["--input", "in.wav", "--outdir", "out", "--separate", "vocals", "drums"])
+    assert args_multi.separate == ["vocals", "drums"]
+
+    args_all = parse_args(["--input", "in.wav", "--outdir", "out", "--separate", "all"])
+    assert args_all.separate == ["all"]
 
     # Invalid choice
     with pytest.raises(SystemExit):

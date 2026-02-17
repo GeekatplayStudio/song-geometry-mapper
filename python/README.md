@@ -58,10 +58,10 @@ python -m bgm.analyze \
   --hop 512 \
   --smooth 5 \
   --norm zscore \
-  --separate vocals
+  --separate vocals drums
 ```
 
-*Note: `--separate` requires `demucs` and will isolate the specified stem first.*
+*Note: `--separate` will analyze the full mix, then analyze each requested stem into subdirectories (`out/vocals`, `out/drums`).*
 
 ### Optional edges
 
