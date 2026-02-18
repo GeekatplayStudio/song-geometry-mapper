@@ -27,6 +27,7 @@
           </div>
           <div class="status-actions">
             <button id="help-btn" class="btn btn-sm" type="button" aria-label="About">About</button>
+            <button id="toggle-math-panel" class="btn btn-sm" type="button" aria-label="Toggle math analysis panel" aria-pressed="false">Math HUD</button>
             <a
               id="support-vlad-btn"
               class="btn btn-sm support-btn"
@@ -40,6 +41,59 @@
           </div>
         </div>
       </header>
+
+      <aside id="math-panel" class="math-panel is-hidden" aria-hidden="true">
+        <div class="math-panel-head">
+          <strong>Live Math Analysis</strong>
+          <button id="close-math-panel" class="math-close" type="button" aria-label="Close math analysis panel">×</button>
+        </div>
+
+        <section class="math-section">
+          <h3>File / Source</h3>
+          <div class="math-grid">
+            <div><span>Name</span><strong id="math-file-name">-</strong></div>
+            <div><span>Type</span><strong id="math-file-type">-</strong></div>
+            <div><span>Size</span><strong id="math-file-size">-</strong></div>
+            <div><span>Duration</span><strong id="math-file-duration">-</strong></div>
+            <div><span>Bitrate (est)</span><strong id="math-file-bitrate">-</strong></div>
+            <div><span>Range</span><strong id="math-file-range">-</strong></div>
+          </div>
+        </section>
+
+        <section class="math-section">
+          <h3>Pipeline</h3>
+          <div class="math-grid">
+            <div><span>Engine</span><strong id="math-engine">-</strong></div>
+            <div><span>Toolchain</span><strong id="math-toolchain">-</strong></div>
+            <div><span>AI Generated</span><strong id="math-ai-generated">Unknown</strong></div>
+            <div><span>FFT / Hop</span><strong id="math-fft-hop">-</strong></div>
+            <div><span>Window</span><strong id="math-window">-</strong></div>
+            <div><span>Sample Rate</span><strong id="math-sample-rate">-</strong></div>
+            <div><span>Channels</span><strong id="math-channels">-</strong></div>
+            <div><span>Frames</span><strong id="math-frames">-</strong></div>
+            <div><span>FPS (analysis)</span><strong id="math-fps">-</strong></div>
+          </div>
+          <p class="math-descriptor-list" id="math-descriptors">Descriptors: -</p>
+        </section>
+
+        <section class="math-section">
+          <h3>Live Frame</h3>
+          <div class="math-grid">
+            <div><span>Playback</span><strong id="math-live-playback">-</strong></div>
+            <div><span>Frame Index</span><strong id="math-live-index">-</strong></div>
+            <div><span>RMS / dBFS</span><strong id="math-live-rms-db">-</strong></div>
+            <div><span>Centroid</span><strong id="math-live-centroid">-</strong></div>
+            <div><span>Spread</span><strong id="math-live-spread">-</strong></div>
+            <div><span>Rolloff (85%)</span><strong id="math-live-rolloff">-</strong></div>
+            <div><span>Peak</span><strong id="math-live-peak">-</strong></div>
+            <div><span>Flux</span><strong id="math-live-flux">-</strong></div>
+            <div><span>Flatness</span><strong id="math-live-flatness">-</strong></div>
+            <div><span>ZCR</span><strong id="math-live-zcr">-</strong></div>
+            <div><span>Tonality (1-flat)</span><strong id="math-live-tonality">-</strong></div>
+            <div><span>Bandwidth Ratio</span><strong id="math-live-bw-ratio">-</strong></div>
+          </div>
+        </section>
+      </aside>
 
       <div id="help-modal" class="modal" aria-hidden="true">
         <div class="modal-content">
@@ -64,8 +118,8 @@
               <strong>Analysis:</strong> We extract RMS, centroid, spread, rolloff, flatness, peak frequency, zero-crossing rate, and flux per frame.
             </p>
             <p>
-              <strong>Mapping:</strong> Choose <em>Manifold (PCA)</em> for structure-based clusters or <em>Time Spine</em> for chronological geometry.
-              Similar sounding regions become spatially closer in manifold mode.
+              <strong>Mapping:</strong> Choose <em>Manifold (PCA)</em> for structure clusters, <em>Time Spine</em> for chronology, <em>Hybrid Flow</em> for both, or <em>Helix Orbit</em> for spiral timeline motion.
+              Similar sounding regions become spatially closer in manifold-style modes.
             </p>
             <h3>Analyzer Modes</h3>
             <p>
@@ -75,9 +129,9 @@
             </p>
             <h3>Controls</h3>
             <ul>
-              <li><strong>Mapping Mode:</strong> Switch between structural (Manifold) and chronological (Time Spine) views.</li>
+              <li><strong>Mapping Mode:</strong> Switch among Manifold, Time Spine, Hybrid Flow, and Helix Orbit views.</li>
               <li><strong>Connections:</strong> Use temporal and similarity links, with straight or wave style.</li>
-              <li><strong>Refine Geometry:</strong> Adjust spread and X/Y/Z offsets of the point cloud.</li>
+              <li><strong>Refine Geometry:</strong> Use song-aware auto spread or manual spread plus X/Y/Z offsets.</li>
               <li><strong>Visibility:</strong> Use "Nodes Only" to hide edges and effects for a cleaner view.</li>
             </ul>
              <p style="margin-top: 2rem; font-size: 0.85rem; opacity: 0.7;">
@@ -135,6 +189,7 @@
                    </label>
                    <div class="button-row" style="margin-top: 6px;">
                    <button id="voice-cache-clear" class="btn" type="button">Use Default Temp</button>
+                   <button id="voice-analysis-cache-clear" class="btn" type="button">Clear Cached Analyses</button>
                    </div>
                    <small id="voice-cache-status" style="display: block; margin-top: 6px; opacity: 0.72; font-size: 0.76rem; line-height: 1.3;">
                      Cache output: default temp folder
@@ -186,34 +241,41 @@
             </div>
           </section>
 
-          <section id="panel-mapping" class="control-block tab-panel" data-tab-panel="mapping">
+          <section id="panel-mapping" class="control-block tab-panel mapping-panel" data-tab-panel="mapping">
             <h2>Mapping & Geometry</h2>
             
             <div class="control-group-title">Structure</div>
             <label>
-              Mapping Mode <span class="info-icon" data-tooltip="Manifold: Structure based on similarity. Time Spine: Chronological order."><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
+              Mapping Mode <span class="info-icon" data-tooltip="Manifold: similarity clusters. Time Spine: chronological line. Hybrid Flow: blend of structure + time. Helix Orbit: spiral timeline."><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
               <select id="mapping-mode">
                 <option value="manifold" selected>Manifold (PCA)</option>
                 <option value="time">Time Spine</option>
+                <option value="hybrid">Hybrid Flow</option>
+                <option value="helix">Helix Orbit</option>
               </select>
             </label>
             <label>
-              3D Frequency Spread <span class="info-icon" data-tooltip="Expand point cloud based on frequency content"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
-              <input id="freq-spread" type="range" min="0.6" max="2.8" value="1.4" step="0.05" />
+              <span class="label-head">
+                <span>3D Frequency Spread <span class="info-icon" data-tooltip="Expand point cloud in X/Z. Auto mode calibrates this from loaded song statistics."><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span></span>
+                <span id="freq-spread-value" class="range-value">1.40x</span>
+              </span>
+              <input id="freq-spread" type="range" min="0.6" max="6" value="1.4" step="0.05" />
             </label>
+            <label class="mapping-toggle"><input id="auto-freq-spread" type="checkbox" checked /> Auto Spread by Song <span class="info-icon" data-tooltip="When enabled, spread is calibrated from each song after analysis/loading and after mapping-mode changes."><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span></label>
+            <p class="mapping-note">Auto mode targets a balanced cloud radius from the loaded song.</p>
             
             <div class="control-group-title">Position</div>
-            <div class="control-group">
+            <div class="control-group mapping-offsets">
                 <label>
-                    Offset X <span id="val-offset-x">0</span>
+                    <span class="label-head">Offset X <span id="val-offset-x" class="range-value">0</span></span>
                     <input id="offset-x" type="range" min="-10" max="10" step="0.1" value="0" />
                 </label>
                 <label>
-                    Offset Y <span id="val-offset-y">0</span>
+                    <span class="label-head">Offset Y <span id="val-offset-y" class="range-value">0</span></span>
                     <input id="offset-y" type="range" min="-10" max="10" step="0.1" value="0" />
                 </label>
                 <label>
-                    Offset Z <span id="val-offset-z">0</span>
+                    <span class="label-head">Offset Z <span id="val-offset-z" class="range-value">0</span></span>
                     <input id="offset-z" type="range" min="-20" max="20" step="0.1" value="0" />
                 </label>
             </div>
@@ -423,6 +485,14 @@
               Fog Depth <span class="info-icon" data-tooltip="Distance based fog that works as a depth cue"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
               <input id="fog-strength" type="range" min="0" max="1" value="0.42" step="0.01" />
             </label>
+            <label>
+              Lens Flare <span class="info-icon" data-tooltip="Cinematic optical flare around the dominant active light source"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
+              <input id="lens-flare-strength" type="range" min="0" max="1.5" value="0.42" step="0.01" />
+            </label>
+            <label>
+              Lens Streaks <span class="info-icon" data-tooltip="Anamorphic horizontal streaks that react to source intensity"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
+              <input id="lens-streak-strength" type="range" min="0" max="1.5" value="0.35" step="0.01" />
+            </label>
 
             <div class="control-group-title">Data &amp; Color</div>
             <label>
@@ -431,6 +501,13 @@
                 <option value="spread" selected>Spectral Spread (kHz)</option>
                 <option value="peak">Peak Frequency (kHz)</option>
               </select>
+            </label>
+            <label>
+              <span class="label-head">
+                <span>Palette Vibrance / Saturation <span class="info-icon" data-tooltip="Boost or reduce palette intensity for spectral color mapping"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span></span>
+                <span id="palette-saturation-value" class="range-value">1.00x</span>
+              </span>
+              <input id="palette-saturation" type="range" min="0" max="2" value="1" step="0.01" />
             </label>
             <label class="file-pill" for="palette-file">
               <span>Load Palette JSON</span>

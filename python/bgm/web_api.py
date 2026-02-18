@@ -50,6 +50,37 @@ def normalize_separate_target(value: str | None) -> str | None:
     return text
 
 
+def parse_boolish(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"1", "true", "yes", "y", "on"}:
+            return True
+        if text in {"0", "false", "no", "n", "off"}:
+            return False
+    return None
+
+
+def ai_generated_from_metadata(metadata: dict[str, Any]) -> tuple[bool | None, str]:
+    checks: list[tuple[Any, str]] = [
+        (metadata.get("ai_generated"), "metadata.ai_generated"),
+        ((metadata.get("source") or {}).get("ai_generated"), "metadata.source.ai_generated"),
+        ((metadata.get("provenance") or {}).get("ai_generated"), "metadata.provenance.ai_generated"),
+        ((metadata.get("settings") or {}).get("ai_generated"), "metadata.settings.ai_generated"),
+    ]
+    for candidate, source in checks:
+        parsed = parse_boolish(candidate)
+        if parsed is not None:
+            return parsed, source
+    return None, "not-provided"
+
+
 def build_payload_from_outputs(
     features: list[dict[str, Any]],
     metadata: dict[str, Any],
@@ -60,12 +91,20 @@ def build_payload_from_outputs(
     columns = metadata.get("columns", {})
     spread_range = columns.get("spectral_spread_khz", {"min": 0, "max": 2.5})
     peak_range_hz = columns.get("peak_hz", {"min": 0, "max": 8_000})
+    ai_generated, ai_source = ai_generated_from_metadata(metadata)
 
     payload: dict[str, Any] = {
         "frames": features,
         "track": {
             "name": source_name,
             "durationSec": float(metadata.get("audio", {}).get("duration_seconds", 0)),
+        },
+        "analysis": {
+            "sampleRateHz": metadata.get("audio", {}).get("sample_rate"),
+            "fftSize": metadata.get("audio", {}).get("n_fft"),
+            "hopSize": metadata.get("audio", {}).get("hop_length"),
+            "aiGenerated": ai_generated,
+            "aiDetectionSource": ai_source,
         },
         "ranges": {
             "spreadRangeKhz": {
@@ -81,6 +120,8 @@ def build_payload_from_outputs(
             "engine": "python-bgm",
             "mode": "voice-api",
             "separated_stem": separated_stem,
+            "ai_generated": ai_generated,
+            "ai_detection_source": ai_source,
         },
     }
 
@@ -115,6 +156,78 @@ def sanitize_song_basename(filename: str) -> str:
     stem = Path(filename or "uploaded-audio").stem
     normalized = re.sub(r"[^a-zA-Z0-9._-]+", "-", stem).strip("-._")
     return normalized or "uploaded-audio"
+
+
+def resolve_cache_root(cache_dir_raw: str, server_config: dict[str, Any]) -> Path:
+    configured = str(server_config.get("cache_dir") or tempfile.gettempdir())
+    root = Path(cache_dir_raw or configured).expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def clear_cached_analysis(cache_root: Path, song_name: str | None = None) -> dict[str, Any]:
+    removed_files = 0
+    removed_dirs = 0
+    targets: list[Path] = []
+
+    def is_analysis_output_dir(path: Path) -> bool:
+        if not path.is_dir():
+            return False
+        required = ("features.json", "features.csv", "metadata.json")
+        return all((path / filename).is_file() for filename in required)
+
+    if song_name:
+        safe = sanitize_song_basename(song_name)
+        targets.append(cache_root / f"{safe}.analysis.json")
+        targets.append(cache_root / safe)
+    else:
+        targets.extend(cache_root.glob("*.analysis.json"))
+        for analysis_json in cache_root.glob("*.analysis.json"):
+            stem = analysis_json.stem
+            if stem.endswith(".analysis"):
+                song_stem = stem[: -len(".analysis")]
+                if song_stem:
+                    targets.append(cache_root / song_stem)
+
+    # Also remove orphan analysis output folders that still contain analyzer artifacts
+    # but may no longer have a matching *.analysis.json index file.
+    for child in cache_root.iterdir():
+        if not child.is_dir():
+            continue
+        if song_name:
+            safe = sanitize_song_basename(song_name)
+            if child.name != safe:
+                continue
+        if is_analysis_output_dir(child):
+            targets.append(child)
+
+    seen: set[str] = set()
+    unique_targets: list[Path] = []
+    for path in targets:
+        key = str(path.resolve()) if path.exists() else str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_targets.append(path)
+
+    for path in unique_targets:
+        try:
+            if path.is_file():
+                path.unlink(missing_ok=True)
+                removed_files += 1
+            elif path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+                removed_dirs += 1
+        except OSError:
+            continue
+
+    return {
+        "cache_root": str(cache_root),
+        "mode": "single-song" if song_name else "all",
+        "song": sanitize_song_basename(song_name) if song_name else None,
+        "removed_files": removed_files,
+        "removed_dirs": removed_dirs,
+    }
 
 
 def compute_audio_hash(audio_bytes: bytes) -> str:
@@ -249,6 +362,10 @@ class VoiceApiHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        if path == "/api/voice/cache/clear":
+            self.handle_cache_clear()
+            return
+
         if path != "/api/voice/analyze":
             self.send_json(404, {"ok": False, "error": "Not found"})
             return
@@ -296,8 +413,7 @@ class VoiceApiHandler(BaseHTTPRequestHandler):
             knn_n = int(read_field("knn_n", server_config.get("knn_n", 4)))
 
             cache_dir_raw = str(read_field("cache_dir", "")).strip()
-            cache_root = Path(cache_dir_raw or server_config.get("cache_dir") or tempfile.gettempdir()).expanduser()
-            cache_root.mkdir(parents=True, exist_ok=True)
+            cache_root = resolve_cache_root(cache_dir_raw, server_config)
 
             song_basename = sanitize_song_basename(filename)
             analysis_json_path = cache_root / f"{song_basename}.analysis.json"
@@ -387,6 +503,43 @@ class VoiceApiHandler(BaseHTTPRequestHandler):
         finally:
             if tmp_dir:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def handle_cache_clear(self) -> None:
+        server_config = getattr(self.server, "config", {})
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            content_length = 0
+
+        body = b""
+        if content_length > 0:
+            body = self.rfile.read(content_length)
+
+        payload: dict[str, Any] = {}
+        if body:
+            content_type = (self.headers.get("Content-Type", "") or "").split(";")[0].strip().lower()
+            if content_type != "application/json":
+                self.send_json(400, {"ok": False, "error": "Expected application/json payload"})
+                return
+            try:
+                parsed = json.loads(body.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                self.send_json(400, {"ok": False, "error": "Invalid JSON payload"})
+                return
+            if not isinstance(parsed, dict):
+                self.send_json(400, {"ok": False, "error": "JSON payload must be an object"})
+                return
+            payload = parsed
+
+        cache_dir_raw = str(payload.get("cache_dir") or "").strip()
+        song_name_raw = str(payload.get("song_name") or "").strip()
+        clear_mode = str(payload.get("mode") or "").strip().lower()
+        clear_all = clear_mode in {"all", "full"} or parse_boolish(payload.get("all")) is True
+
+        cache_root = resolve_cache_root(cache_dir_raw, server_config)
+        result = clear_cached_analysis(cache_root, None if clear_all else song_name_raw or None)
+
+        self.send_json(200, {"ok": True, **result})
 
 
 def main(argv: list[str] | None = None) -> int:

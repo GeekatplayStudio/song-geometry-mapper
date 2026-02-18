@@ -1,0 +1,80 @@
+{
+  "generated_at": "2026-02-18T01:12:58.358518+00:00",
+  "input_audio": "/tmp/sgm-voice-api-jxfjnp47/Chrome Hearts in Prague 2.wav",
+  "settings": {
+    "sr": 48000,
+    "n_fft": 2048,
+    "hop": 512,
+    "smooth": 1,
+    "norm": "none",
+    "exclude_from_norm_and_smooth": [
+      "t_seconds",
+      "frame_index"
+    ],
+    "edge_mode": "none",
+    "knn_n": 4,
+    "knn_columns": [
+      "spectral_centroid_hz",
+      "spectral_spread_hz",
+      "spectral_flatness",
+      "rms",
+      "peak_hz"
+    ],
+    "separated_stem": null
+  },
+  "audio": {
+    "sample_rate": 48000,
+    "duration_seconds": 232.27997916666666,
+    "num_samples": 11149439,
+    "num_frames": 21777,
+    "n_fft": 2048,
+    "hop_length": 512
+  },
+  "columns": {
+    "t_seconds": {
+      "min": 0.0,
+      "max": 232.27733333333333
+    },
+    "rms": {
+      "min": 2.9945089409011416e-05,
+      "max": 0.20676378905773163
+    },
+    "spectral_centroid_hz": {
+      "min": 302.6022866025944,
+      "max": 10487.022941349493
+    },
+    "spectral_spread_hz": {
+      "min": 1184.6119041319448,
+      "max": 6740.5228766287755
+    },
+    "spectral_rolloff_hz": {
+      "min": 257.8125,
+      "max": 16546.875
+    },
+    "spectral_flatness": {
+      "min": 6.677893225059961e-07,
+      "max": 0.14038686454296112
+    },
+    "zcr": {
+      "min": 0.00244140625,
+      "max": 0.45751953125
+    },
+    "peak_hz": {
+      "min": 23.4375,
+      "max": 11367.1875
+    },
+    "frame_index": {
+      "min": 0.0,
+      "max": 21776.0
+    },
+    "spectral_spread_khz": {
+      "min": 1.1846119041319447,
+      "max": 6.740522876628775
+    }
+  },
+  "rows": 21777,
+  "edges": {
+    "count": 0,
+    "path": null
+  }
+}

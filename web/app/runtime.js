@@ -25,6 +25,8 @@ export function createRuntime() {
   const knnNeighbors = document.getElementById("knn-neighbors");
   const knnBoost = document.getElementById("knn-boost");
   const freqSpread = document.getElementById("freq-spread");
+  const freqSpreadValue = document.getElementById("freq-spread-value");
+  const autoFreqSpread = document.getElementById("auto-freq-spread");
   
   const pointScale = document.getElementById("point-scale");
   const pointOpacity = document.getElementById("point-opacity");
@@ -61,7 +63,11 @@ export function createRuntime() {
   const glowShift = document.getElementById("glow-shift");
   const glowDecay = document.getElementById("glow-decay");
   const fogStrength = document.getElementById("fog-strength");
+  const lensFlareStrength = document.getElementById("lens-flare-strength");
+  const lensStreakStrength = document.getElementById("lens-streak-strength");
   const colorMetric = document.getElementById("color-metric");
+  const paletteSaturation = document.getElementById("palette-saturation");
+  const paletteSaturationValue = document.getElementById("palette-saturation-value");
   const paletteFile = document.getElementById("palette-file");
   const clearPaletteBtn = document.getElementById("clear-palette");
   const exportMode = document.getElementById("export-mode");
@@ -91,6 +97,7 @@ export function createRuntime() {
   const voiceStem = document.getElementById("voice-stem");
   const voiceCacheDir = document.getElementById("voice-cache-dir");
   const voiceCacheClearBtn = document.getElementById("voice-cache-clear");
+  const voiceAnalysisCacheClearBtn = document.getElementById("voice-analysis-cache-clear");
   const voiceCacheStatus = document.getElementById("voice-cache-status");
   const offsetX = document.getElementById("offset-x");
   const offsetY = document.getElementById("offset-y");
@@ -173,6 +180,7 @@ export function createRuntime() {
     dpr: Math.max(1, window.devicePixelRatio || 1),
     decodeContext: null,
     currentAudioUrl: null,
+    sourceFileInfo: null,
     map: null,
     trail: [],
     lastTrailIndex: -1,
@@ -307,6 +315,8 @@ export function createRuntime() {
     knnNeighbors,
     knnBoost,
     freqSpread,
+    freqSpreadValue,
+    autoFreqSpread,
     pointScale,
     pointOpacity,
     pointSolidness,
@@ -341,7 +351,11 @@ export function createRuntime() {
     glowShift,
     glowDecay,
     fogStrength,
+    lensFlareStrength,
+    lensStreakStrength,
     colorMetric,
+    paletteSaturation,
+    paletteSaturationValue,
     paletteFile,
     clearPaletteBtn,
     exportMode,
@@ -366,6 +380,7 @@ export function createRuntime() {
     voiceStem,
     voiceCacheDir,
     voiceCacheClearBtn,
+    voiceAnalysisCacheClearBtn,
     voiceCacheStatus,
     offsetX,
     offsetY,

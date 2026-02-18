@@ -89,10 +89,18 @@ Each descriptor is min-max normalized to `[0,1]` (browser flow).
 - `x` follows time linearly.
 - `y` and `z` are weighted combinations of normalized descriptor values.
 
+3. `Hybrid Flow`
+- Blends `Time Spine` and `Manifold` coordinates so chronology and similarity clusters are both visible.
+
+4. `Helix Orbit`
+- Time-unrolled spiral that wraps the song into helical turns, with radius driven by spread + RMS.
+
 Time Spine equations used in renderer:
 - `x = (tNorm - 0.5) * 36`
 - `y = (peakN - 0.5) * 20 + (centroidN - 0.5) * 7`
 - `z = (spreadN - 0.5) * 18 + (1 - flatnessN - 0.5) * 8 + (rmsN - 0.5) * 9 + (fluxN - 0.5) * 5`
+
+`3D Frequency Spread` can now be auto-calibrated per song (`Auto Spread by Song`) from geometry radius and spectral spread statistics, then snapped to the slider step/range.
 
 ### Node visual attributes
 - size: function of normalized RMS
@@ -222,6 +230,7 @@ In the web app:
 
 Notes:
 - Backend API endpoint is `http://127.0.0.1:5180/api/voice/analyze`.
+- Cache clear endpoint is `http://127.0.0.1:5180/api/voice/cache/clear` (JSON POST).
 - If backend is unavailable, web app falls back to classic in-browser analysis.
 - Manual JSON import still accepts raw frame arrays or exported analysis objects with `frames`.
 

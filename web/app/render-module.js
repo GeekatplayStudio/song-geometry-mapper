@@ -54,6 +54,8 @@ export function createRenderModule(runtime) {
     glowThreshold,
     glowDecay,
     fogStrength,
+    lensFlareStrength,
+    lensStreakStrength,
     metricRms,
     metricCentroid,
     metricSpread,
@@ -1110,6 +1112,177 @@ export function createRenderModule(runtime) {
   
     ctx.restore();
   }
+
+  function selectLensSource(projected, activeIndex) {
+    if (!Array.isArray(projected) || projected.length === 0) {
+      return null;
+    }
+
+    if (activeIndex >= 0) {
+      const active = projected.find((item) => item.index === activeIndex);
+      if (active) {
+        return active;
+      }
+    }
+
+    const centerX = state.width * 0.5;
+    const centerY = state.height * 0.5;
+    const maxDim = Math.max(1, Math.max(state.width, state.height));
+    let best = null;
+    let bestScore = -Infinity;
+
+    for (const item of projected) {
+      const distance = Math.hypot(item.x - centerX, item.y - centerY);
+      const centerBias = 1 - clamp(distance / (maxDim * 0.55), 0, 1);
+      const score =
+        item.frame.rmsN * 0.62 +
+        item.frame.fluxN * 0.38 +
+        item.activity * 0.16 +
+        centerBias * 0.24;
+      if (score > bestScore) {
+        best = item;
+        bestScore = score;
+      }
+    }
+
+    return best;
+  }
+
+  function drawLensArtifacts(source, nowSec, bloom, glowGain, pointAlpha) {
+    const flare = Number(lensFlareStrength?.value || 0);
+    const streaks = Number(lensStreakStrength?.value || 0);
+    if (!source || (flare <= 0.001 && streaks <= 0.001)) {
+      return;
+    }
+
+    const centerX = state.width * 0.5;
+    const centerY = state.height * 0.5;
+    const maxDim = Math.max(1, Math.max(state.width, state.height));
+    const axisX = centerX - source.x;
+    const axisY = centerY - source.y;
+    const axisLen = Math.hypot(axisX, axisY) || 1;
+    const energy = clamp(
+      source.frame.rmsN * 0.64 +
+      source.frame.fluxN * 0.36 +
+      source.activity * 0.2 +
+      source.connectionPulse * 0.18,
+      0,
+      2,
+    );
+
+    if (energy <= 0.02) {
+      return;
+    }
+
+    const tintWarm = mixColor(source.frame.color, { r: 255, g: 222, b: 154 }, 0.35);
+    const tintCool = mixColor(source.frame.color, { r: 102, g: 162, b: 255 }, 0.4);
+
+    if (flare > 0.001) {
+      const coreAlpha = clamp(
+        (0.08 + energy * 0.2 + bloom * 0.16) * flare * pointAlpha * (0.66 + glowGain * 0.34),
+        0.01,
+        0.72,
+      );
+      const coreRadius = clamp(
+        source.radius * (2.2 + flare * 4.4 + energy * 1.8),
+        8,
+        maxDim * 0.18,
+      );
+
+      const core = ctx.createRadialGradient(source.x, source.y, 0, source.x, source.y, coreRadius);
+      core.addColorStop(0, rgba(tintWarm, coreAlpha.toFixed(3)));
+      core.addColorStop(0.55, rgba(source.frame.color, clamp(coreAlpha * 0.38, 0.02, 0.4).toFixed(3)));
+      core.addColorStop(1, rgba(source.frame.color, 0));
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(source.x, source.y, coreRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      const ghostCount = 5;
+      for (let i = 0; i < ghostCount; i += 1) {
+        const t = -0.35 + (i / (ghostCount - 1)) * 1.8;
+        const gx = source.x + axisX * t;
+        const gy = source.y + axisY * t;
+        const fade = 1 - i / ghostCount;
+        const ghostRadius = clamp(
+          coreRadius * (0.32 + fade * 0.58) + maxDim * (0.008 + i * 0.002),
+          6,
+          maxDim * 0.16,
+        );
+        const ghostAlpha = clamp(coreAlpha * (0.2 + fade * 0.48), 0.01, 0.38);
+        const ghostColor = i % 2 === 0 ? tintCool : tintWarm;
+        const ghost = ctx.createRadialGradient(gx, gy, 0, gx, gy, ghostRadius);
+        ghost.addColorStop(0, rgba(ghostColor, ghostAlpha.toFixed(3)));
+        ghost.addColorStop(0.65, rgba(ghostColor, clamp(ghostAlpha * 0.26, 0.01, 0.12).toFixed(3)));
+        ghost.addColorStop(1, rgba(ghostColor, 0));
+        ctx.fillStyle = ghost;
+        ctx.beginPath();
+        ctx.arc(gx, gy, ghostRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const ringRadius = clamp(axisLen * 0.28 + coreRadius * (1.35 + flare * 0.35), 20, maxDim * 0.46);
+      ctx.strokeStyle = rgba(tintWarm, clamp(coreAlpha * 0.16, 0.01, 0.12).toFixed(3));
+      ctx.lineWidth = Math.max(1, source.radius * 0.12);
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if (streaks > 0.001) {
+      const angle = Math.sin(nowSec * 0.42 + source.index * 0.021) * 0.11 + (state.userYaw + state.autoYaw) * 0.08;
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
+      const perpX = -dirY;
+      const perpY = dirX;
+      const halfLength = maxDim * (0.2 + streaks * 0.52 + energy * 0.1);
+      const streakAlpha = clamp(
+        (0.05 + energy * 0.14 + bloom * 0.1) * streaks * pointAlpha * (0.6 + glowGain * 0.28),
+        0.01,
+        0.48,
+      );
+
+      const main = ctx.createLinearGradient(
+        source.x - dirX * halfLength,
+        source.y - dirY * halfLength,
+        source.x + dirX * halfLength,
+        source.y + dirY * halfLength,
+      );
+      main.addColorStop(0, rgba(tintCool, 0));
+      main.addColorStop(0.25, rgba(tintCool, clamp(streakAlpha * 0.24, 0.01, 0.18).toFixed(3)));
+      main.addColorStop(0.5, rgba(tintWarm, clamp(streakAlpha * 0.92, 0.03, 0.48).toFixed(3)));
+      main.addColorStop(0.75, rgba(tintCool, clamp(streakAlpha * 0.2, 0.01, 0.16).toFixed(3)));
+      main.addColorStop(1, rgba(tintCool, 0));
+      ctx.strokeStyle = main;
+      ctx.lineWidth = Math.max(0.6, 0.8 + source.radius * 0.08 + streaks * 1.85);
+      ctx.beginPath();
+      ctx.moveTo(source.x - dirX * halfLength, source.y - dirY * halfLength);
+      ctx.lineTo(source.x + dirX * halfLength, source.y + dirY * halfLength);
+      ctx.stroke();
+
+      for (const side of [-1, 1]) {
+        const offset = side * (1.4 + source.radius * 0.1);
+        const sx = source.x + perpX * offset;
+        const sy = source.y + perpY * offset;
+        const subLen = halfLength * 0.48;
+        const sub = ctx.createLinearGradient(
+          sx - dirX * subLen,
+          sy - dirY * subLen,
+          sx + dirX * subLen,
+          sy + dirY * subLen,
+        );
+        sub.addColorStop(0, rgba(tintWarm, 0));
+        sub.addColorStop(0.5, rgba(tintWarm, clamp(streakAlpha * 0.22, 0.01, 0.16).toFixed(3)));
+        sub.addColorStop(1, rgba(tintWarm, 0));
+        ctx.strokeStyle = sub;
+        ctx.lineWidth = Math.max(0.45, 0.6 + streaks * 1.0);
+        ctx.beginPath();
+        ctx.moveTo(sx - dirX * subLen, sy - dirY * subLen);
+        ctx.lineTo(sx + dirX * subLen, sy + dirY * subLen);
+        ctx.stroke();
+      }
+    }
+  }
   
   function drawPoints(projected, activeIndex, nowSec) {
     const bloom = Number(bloomStrength.value);
@@ -1247,6 +1420,9 @@ export function createRenderModule(runtime) {
       ctx.arc(active.x, active.y, active.radius * 2.7, 0, Math.PI * 2);
       ctx.stroke();
     }
+
+    const lensSource = selectLensSource(projected, activeIndex);
+    drawLensArtifacts(lensSource, nowSec, bloom, glowGain, pointAlpha);
   
     ctx.restore();
   }

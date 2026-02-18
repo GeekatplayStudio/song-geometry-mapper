@@ -26,6 +26,8 @@ export function createWorkflowModule(runtime) {
     motionStrength,
     startRecordingBtn,
     stopRecordingBtn,
+    FFT_SIZE,
+    HOP_SIZE,
     setSessionLabel,
     formatTrackCaption,
     safeFilenameBase,
@@ -35,6 +37,7 @@ export function createWorkflowModule(runtime) {
     buildTemporalEdges,
     buildKnnEdges,
     applyMapping,
+    applySongAwareFreqSpread,
     activeMetricInfo,
     colorFromMetric,
     readCurrentControlSettings,
@@ -45,6 +48,115 @@ export function createWorkflowModule(runtime) {
     getFrameIndexAtTime,
     activityForIndex,
   } = runtime;
+
+  const DESCRIPTOR_KEYS = ["rms", "centroidHz", "spreadHz", "rolloffHz", "flatness", "zcr", "peakHz", "flux"];
+
+  function fileExtension(name) {
+    const text = String(name || "");
+    const idx = text.lastIndexOf(".");
+    return idx >= 0 ? text.slice(idx + 1).toLowerCase() : "";
+  }
+
+  function setSourceFileInfo(file, kind = "audio") {
+    if (!file) {
+      return;
+    }
+
+    const sizeBytes = Number(file.size);
+    const lastModifiedMs = Number(file.lastModified);
+    state.sourceFileInfo = {
+      kind,
+      name: String(file.name || ""),
+      extension: fileExtension(file.name),
+      mimeType: String(file.type || ""),
+      sizeBytes: Number.isFinite(sizeBytes) && sizeBytes > 0 ? sizeBytes : 0,
+      lastModifiedMs: Number.isFinite(lastModifiedMs) && lastModifiedMs > 0 ? lastModifiedMs : null,
+    };
+  }
+
+  function estimateBitrateBps(sizeBytes, durationSec) {
+    const bytes = Number(sizeBytes);
+    const duration = Number(durationSec);
+    if (!Number.isFinite(bytes) || bytes <= 0 || !Number.isFinite(duration) || duration <= 0) {
+      return null;
+    }
+    return (bytes * 8) / duration;
+  }
+
+  function toFiniteOrNull(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function parseBoolish(value) {
+    if (value === true || value === false) {
+      return value;
+    }
+    if (typeof value === "number") {
+      if (value === 1) {
+        return true;
+      }
+      if (value === 0) {
+        return false;
+      }
+    }
+    if (typeof value === "string") {
+      const text = value.trim().toLowerCase();
+      if (["1", "true", "yes", "y", "on"].includes(text)) {
+        return true;
+      }
+      if (["0", "false", "no", "n", "off"].includes(text)) {
+        return false;
+      }
+    }
+    return null;
+  }
+
+  function buildAnalysisInfo(map, overrides = {}) {
+    const durationSec = Number(map?.duration);
+    const frameCount = Array.isArray(map?.frames) ? map.frames.length : 0;
+    const frameRate = Number.isFinite(durationSec) && durationSec > 0 ? frameCount / durationSec : null;
+
+    const sampleRateHz = toFiniteOrNull(overrides.sampleRateHz);
+    const channelsRaw = toFiniteOrNull(overrides.channels);
+    const channels = Number.isFinite(channelsRaw) && channelsRaw > 0 ? Math.round(channelsRaw) : null;
+    const nyquistHz = sampleRateHz && sampleRateHz > 0 ? sampleRateHz * 0.5 : null;
+
+    const directBitrate = toFiniteOrNull(overrides.estimatedBitrateBps);
+    const fallbackBitrate = estimateBitrateBps(state.sourceFileInfo?.sizeBytes, durationSec);
+    const estimatedBitrateBps = directBitrate && directBitrate > 0 ? directBitrate : fallbackBitrate;
+    const aiGenerated = parseBoolish(overrides.aiGenerated);
+    const aiDetectionSource = overrides.aiDetectionSource ? String(overrides.aiDetectionSource) : "not-provided";
+
+    const fftSizeRaw = toFiniteOrNull(overrides.fftSize);
+    const hopSizeRaw = toFiniteOrNull(overrides.hopSize);
+
+    return {
+      engine: String(overrides.engine || "Song Geometry Mapper"),
+      toolchain: String(overrides.toolchain || "Unknown"),
+      fftSize: Number.isFinite(fftSizeRaw) && fftSizeRaw > 0 ? Math.round(fftSizeRaw) : FFT_SIZE,
+      hopSize: Number.isFinite(hopSizeRaw) && hopSizeRaw > 0 ? Math.round(hopSizeRaw) : HOP_SIZE,
+      window: String(overrides.window || "Hann"),
+      sampleRateHz,
+      channels,
+      nyquistHz,
+      analysisFrames: frameCount,
+      frameRate,
+      descriptors: Array.isArray(overrides.descriptors) && overrides.descriptors.length > 0 ? overrides.descriptors : DESCRIPTOR_KEYS,
+      estimatedBitrateBps: estimatedBitrateBps && estimatedBitrateBps > 0 ? estimatedBitrateBps : null,
+      sourceLowHz: 20,
+      sourceHighHz: nyquistHz || 20000,
+      aiGenerated,
+      aiDetectionSource,
+    };
+  }
+
+  function attachAnalysisInfo(map, overrides = {}) {
+    if (!map || typeof map !== "object") {
+      return;
+    }
+    map.analysisInfo = buildAnalysisInfo(map, overrides);
+  }
 
   function buildAnalysisExportPayload() {
     if (!state.map) {
@@ -226,6 +338,7 @@ export function createWorkflowModule(runtime) {
   }
   
   function setAudioFromFile(file) {
+    setSourceFileInfo(file, "audio");
     if (state.currentAudioUrl) {
       URL.revokeObjectURL(state.currentAudioUrl);
       state.currentAudioUrl = null;
@@ -426,6 +539,44 @@ export function createWorkflowModule(runtime) {
       temporalEdges,
       knnEdges,
     };
+
+    const payloadAnalysis = payload?.analysis || payload?.meta?.analysis || {};
+    const payloadSampleRate =
+      payloadAnalysis.sampleRateHz ??
+      payloadAnalysis.sample_rate_hz ??
+      payload?.track?.sampleRateHz ??
+      payload?.track?.sample_rate_hz;
+    const payloadChannels = payloadAnalysis.channels ?? payload?.track?.channels;
+    const payloadFftSize = payloadAnalysis.fftSize ?? payloadAnalysis.fft_size;
+    const payloadHopSize = payloadAnalysis.hopSize ?? payloadAnalysis.hop_size;
+    const payloadWindow = payloadAnalysis.window || "Hann";
+    const payloadAiGenerated =
+      payloadAnalysis.aiGenerated ??
+      payloadAnalysis.ai_generated ??
+      payload?.source?.ai_generated ??
+      payload?.source?.aiGenerated ??
+      null;
+    const payloadAiSource =
+      payloadAnalysis.aiDetectionSource ??
+      payloadAnalysis.ai_detection_source ??
+      payload?.source?.ai_detection_source ??
+      payload?.source?.aiDetectionSource ??
+      "not-provided";
+
+    attachAnalysisInfo(map, {
+      engine: payload ? "Imported Analysis Payload" : "Imported Frame JSON",
+      toolchain: payload ? "Voice/Python JSON -> Web Runtime" : "JSON Import -> Web Runtime",
+      sampleRateHz: payloadSampleRate,
+      channels: payloadChannels,
+      fftSize: payloadFftSize,
+      hopSize: payloadHopSize,
+      window: payloadWindow,
+      descriptors: DESCRIPTOR_KEYS,
+      aiGenerated: payloadAiGenerated,
+      aiDetectionSource: payloadAiSource,
+    });
+
+    applySongAwareFreqSpread(map);
   
     const metricInfo = activeMetricInfo();
     const range = metricInfo.rangeForMap(map);
@@ -446,6 +597,7 @@ export function createWorkflowModule(runtime) {
   
   async function loadAnalysisJson(file) {
     try {
+      setSourceFileInfo(file, "json");
       setSessionLabel("Loading JSON...", true);
       const text = await file.text();
       let rawData;
@@ -480,6 +632,19 @@ export function createWorkflowModule(runtime) {
   
     state.map = await analyzeSong(decoded, (progress) => {
       setSessionLabel(`Analyzing ${Math.round(progress * 100)}%`, true);
+    });
+
+    attachAnalysisInfo(state.map, {
+      engine: "Classic Browser FFT",
+      toolchain: "WebAudio decode -> Hann FFT -> Descriptor Mapping",
+      sampleRateHz: decoded.sampleRate,
+      channels: decoded.numberOfChannels,
+      fftSize: FFT_SIZE,
+      hopSize: HOP_SIZE,
+      window: "Hann",
+      descriptors: DESCRIPTOR_KEYS,
+      aiGenerated: null,
+      aiDetectionSource: "not-available-in-browser-analysis",
     });
   
     trackCaption.textContent = formatTrackCaption(file.name);
@@ -526,6 +691,30 @@ export function createWorkflowModule(runtime) {
     }
   
     applyAnalysisPayload(result.payload, file.name);
+    attachAnalysisInfo(state.map, {
+      engine: "Voice / Deep Backend",
+      toolchain: "bgm.web_api -> Python analysis payload -> Web Runtime",
+      sampleRateHz:
+        result?.payload?.analysis?.sampleRateHz ??
+        result?.payload?.analysis?.sample_rate_hz ??
+        result?.payload?.track?.sampleRateHz ??
+        null,
+      channels: result?.payload?.analysis?.channels ?? result?.payload?.track?.channels ?? null,
+      fftSize: result?.payload?.analysis?.fftSize ?? result?.payload?.analysis?.fft_size ?? FFT_SIZE,
+      hopSize: result?.payload?.analysis?.hopSize ?? result?.payload?.analysis?.hop_size ?? HOP_SIZE,
+      window: result?.payload?.analysis?.window || "Hann",
+      descriptors: DESCRIPTOR_KEYS,
+      aiGenerated:
+        result?.payload?.analysis?.aiGenerated ??
+        result?.payload?.analysis?.ai_generated ??
+        result?.payload?.source?.ai_generated ??
+        null,
+      aiDetectionSource:
+        result?.payload?.analysis?.aiDetectionSource ??
+        result?.payload?.analysis?.ai_detection_source ??
+        result?.payload?.source?.ai_detection_source ??
+        "not-provided",
+    });
     enablePlaybackUi();
     setSessionLabel("Voice Ready", false);
   }

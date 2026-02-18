@@ -5,6 +5,8 @@ export function createAnalysisModule(runtime) {
     controlDrawer,
     mappingMode,
     knnNeighbors,
+    freqSpread,
+    autoFreqSpread,
     visualPreset,
     customPresetSelect,
     customPresetName,
@@ -12,6 +14,7 @@ export function createAnalysisModule(runtime) {
     legendBar,
     legendScale,
     colorMetric,
+    paletteSaturation,
     player,
     state,
     FFT_SIZE,
@@ -432,55 +435,87 @@ export function createAnalysisModule(runtime) {
     );
   }
   
+  function computeNormalizedPcaCoords(frames) {
+    const vectors = frames.map((frame) => frame.featureVec);
+    const coords = pcaProject(vectors, 3);
+
+    const ranges = [
+      { min: Infinity, max: -Infinity },
+      { min: Infinity, max: -Infinity },
+      { min: Infinity, max: -Infinity },
+    ];
+
+    for (const c of coords) {
+      for (let i = 0; i < 3; i += 1) {
+        if (c[i] < ranges[i].min) {
+          ranges[i].min = c[i];
+        }
+        if (c[i] > ranges[i].max) {
+          ranges[i].max = c[i];
+        }
+      }
+    }
+
+    return coords.map((c) => [
+      normalizeValue(ranges[0], c[0]),
+      normalizeValue(ranges[1], c[1]),
+      normalizeValue(ranges[2], c[2]),
+    ]);
+  }
+
   function applyMapping(frames, mode) {
     if (!frames || frames.length === 0) {
       return;
     }
   
+    const modeKey =
+      typeof mode === "string" && ["manifold", "time", "hybrid", "helix"].includes(mode)
+        ? mode
+        : "time";
     const total = Math.max(1, frames.length - 1);
-  
-    if (mode === "manifold") {
-      // PCA layout reveals descriptor clusters/bridges across the whole track.
-      const vectors = frames.map((frame) => frame.featureVec);
-      const coords = pcaProject(vectors, 3);
-  
-      const ranges = [
-        { min: Infinity, max: -Infinity },
-        { min: Infinity, max: -Infinity },
-        { min: Infinity, max: -Infinity },
-      ];
-  
-      for (const c of coords) {
-        for (let i = 0; i < 3; i += 1) {
-          if (c[i] < ranges[i].min) {
-            ranges[i].min = c[i];
-          }
-          if (c[i] > ranges[i].max) {
-            ranges[i].max = c[i];
-          }
-        }
-      }
-  
-      for (let i = 0; i < frames.length; i += 1) {
-        const frame = frames[i];
-        const c = coords[i];
-        const tNorm = i / total;
-  
-        const xN = normalizeValue(ranges[0], c[0]);
-        const yN = normalizeValue(ranges[1], c[1]);
-        const zN = normalizeValue(ranges[2], c[2]);
-  
-        frame.x = (xN - 0.5) * 28 + (tNorm - 0.5) * 1.8;
-        frame.y = (yN - 0.5) * 20 + (frame.rmsN - 0.5) * 3;
-        frame.z = (zN - 0.5) * 21 + (frame.fluxN - 0.5) * 4;
-      }
-      return;
-    }
-  
+    const usesPca = modeKey === "manifold" || modeKey === "hybrid";
+    const pcaCoords = usesPca ? computeNormalizedPcaCoords(frames) : null;
+    const turns = clamp(4.8 + frames.length / 720, 4.8, 10.5);
+
     for (let i = 0; i < frames.length; i += 1) {
       const frame = frames[i];
       const tNorm = i / total;
-  
+
+      if (modeKey === "manifold") {
+        const c = pcaCoords[i];
+        frame.x = (c[0] - 0.5) * 28 + (tNorm - 0.5) * 1.8;
+        frame.y = (c[1] - 0.5) * 20 + (frame.rmsN - 0.5) * 3;
+        frame.z = (c[2] - 0.5) * 21 + (frame.fluxN - 0.5) * 4;
+        continue;
+      }
+
+      if (modeKey === "hybrid") {
+        const c = pcaCoords[i];
+        const tCentered = tNorm - 0.5;
+        const arc = tCentered * Math.PI * 1.55;
+        const timeX = Math.sin(arc) * 17;
+        const timeY = tCentered * 26 + (frame.rmsN - 0.5) * 7;
+        const timeZ = Math.cos(arc) * 10 + (frame.fluxN - 0.5) * 6;
+
+        const manifoldX = (c[0] - 0.5) * 28;
+        const manifoldY = (c[1] - 0.5) * 20;
+        const manifoldZ = (c[2] - 0.5) * 21;
+
+        frame.x = lerp(timeX, manifoldX, 0.62) + (frame.centroidN - 0.5) * 5;
+        frame.y = lerp(timeY, manifoldY, 0.46) + (1 - frame.flatnessN - 0.5) * 4.5;
+        frame.z = lerp(timeZ, manifoldZ, 0.62) + (frame.peakN - 0.5) * 4;
+        continue;
+      }
+
+      if (modeKey === "helix") {
+        const angle = tNorm * Math.PI * 2 * turns + (frame.fluxN - 0.5) * 1.5;
+        const radius = 13 + frame.spreadN * 12 + frame.rmsN * 6;
+        frame.x = Math.cos(angle) * radius + (frame.centroidN - 0.5) * 3;
+        frame.y = (tNorm - 0.5) * 46 + Math.sin(angle * 0.5) * 3 + (frame.rmsN - 0.5) * 5;
+        frame.z = Math.sin(angle) * radius + (frame.peakN - 0.5) * 3;
+        continue;
+      }
+
       frame.x = (tNorm - 0.5) * 36;
       frame.y = (frame.peakN - 0.5) * 20 + (frame.centroidN - 0.5) * 7;
       frame.z =
@@ -490,14 +525,153 @@ export function createAnalysisModule(runtime) {
         (frame.fluxN - 0.5) * 5;
     }
   }
+
+  function percentileSorted(sortedValues, t) {
+    if (!sortedValues.length) {
+      return 0;
+    }
+
+    const clampedT = clamp(t, 0, 1);
+    const pos = (sortedValues.length - 1) * clampedT;
+    const lo = Math.floor(pos);
+    const hi = Math.min(sortedValues.length - 1, lo + 1);
+    const mix = pos - lo;
+    return lerp(sortedValues[lo], sortedValues[hi], mix);
+  }
+
+  function snapToInputStep(value, input) {
+    const step = Number(input?.step);
+    if (!Number.isFinite(step) || step <= 0) {
+      return value;
+    }
+
+    const min = Number(input?.min);
+    const origin = Number.isFinite(min) ? min : 0;
+    return origin + Math.round((value - origin) / step) * step;
+  }
+
+  function estimateSongAwareFreqSpread(map) {
+    if (!map || !Array.isArray(map.frames) || map.frames.length === 0 || !freqSpread) {
+      return null;
+    }
+
+    const radialMagnitudes = [];
+    const spreadKhzValues = [];
+
+    for (const frame of map.frames) {
+      const x = Number(frame.x);
+      const z = Number(frame.z);
+      if (Number.isFinite(x) && Number.isFinite(z)) {
+        radialMagnitudes.push(Math.hypot(x, z));
+      }
+
+      const spreadKhz = Number(frame.spreadKhz);
+      if (Number.isFinite(spreadKhz)) {
+        spreadKhzValues.push(spreadKhz);
+      }
+    }
+
+    if (radialMagnitudes.length === 0) {
+      return null;
+    }
+
+    radialMagnitudes.sort((a, b) => a - b);
+    const radiusP85 = percentileSorted(radialMagnitudes, 0.85);
+    const targetRadius = 20;
+    const geometryScale = targetRadius / Math.max(2.4, radiusP85);
+
+    let musicFactor = 1;
+    if (spreadKhzValues.length >= 8) {
+      spreadKhzValues.sort((a, b) => a - b);
+      const spreadP15 = percentileSorted(spreadKhzValues, 0.15);
+      const spreadP85 = percentileSorted(spreadKhzValues, 0.85);
+      const spreadMedian = percentileSorted(spreadKhzValues, 0.5);
+      const spreadBand = Math.max(0, spreadP85 - spreadP15);
+      musicFactor = clamp(0.86 + spreadBand * 0.3 + spreadMedian * 0.05, 0.78, 1.36);
+    } else if (
+      map.spreadRangeKhz &&
+      Number.isFinite(Number(map.spreadRangeKhz.min)) &&
+      Number.isFinite(Number(map.spreadRangeKhz.max))
+    ) {
+      const spreadBand = Math.max(0, Number(map.spreadRangeKhz.max) - Number(map.spreadRangeKhz.min));
+      musicFactor = clamp(0.9 + spreadBand * 0.22, 0.8, 1.3);
+    }
+
+    const minValue = Number(freqSpread.min);
+    const maxValue = Number(freqSpread.max);
+    const min = Number.isFinite(minValue) ? minValue : 0.6;
+    const max = Number.isFinite(maxValue) ? maxValue : 6;
+
+    const raw = clamp(geometryScale * musicFactor, min, max);
+    const snapped = snapToInputStep(raw, freqSpread);
+    return clamp(Number(snapped.toFixed(2)), min, max);
+  }
+
+  function applySongAwareFreqSpread(map = state.map, options = {}) {
+    if (!freqSpread) {
+      return null;
+    }
+
+    const force = options?.force === true;
+    if (!force && autoFreqSpread && !autoFreqSpread.checked) {
+      return null;
+    }
+
+    const spread = estimateSongAwareFreqSpread(map);
+    if (!Number.isFinite(spread)) {
+      return null;
+    }
+
+    freqSpread.value = String(spread);
+    if (map && typeof map === "object") {
+      map.recommendedFreqSpread = spread;
+    }
+
+    return spread;
+  }
   
+  function applyPaletteVibranceSaturation(rgb, amount) {
+    const r = clamp(Number(rgb?.[0]) || 0, 0, 255);
+    const g = clamp(Number(rgb?.[1]) || 0, 0, 255);
+    const b = clamp(Number(rgb?.[2]) || 0, 0, 255);
+    const saturation = clamp(Number(amount), 0, 2);
+    if (Math.abs(saturation - 1) < 1e-4) {
+      return [Math.round(r), Math.round(g), Math.round(b)];
+    }
+
+    const gray = (r + g + b) / 3;
+    const chroma = (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
+    let scale = saturation;
+    if (saturation > 1) {
+      const boost = saturation - 1;
+      // Vibrance-like behavior: boost muted colors more aggressively.
+      scale = 1 + boost * (0.35 + (1 - chroma) * 0.85);
+    }
+
+    return [
+      clamp(Math.round(gray + (r - gray) * scale), 0, 255),
+      clamp(Math.round(gray + (g - gray) * scale), 0, 255),
+      clamp(Math.round(gray + (b - gray) * scale), 0, 255),
+    ];
+  }
+
   function activePalette() {
+
     if (state.customPaletteStops && state.customPaletteStops.length >= 2) {
-      return state.customPaletteStops;
+      const saturation = paletteSaturation ? Number(paletteSaturation.value) : 1;
+      if (!Number.isFinite(saturation) || Math.abs(saturation - 1) < 1e-4) {
+        return state.customPaletteStops;
+      }
+      return state.customPaletteStops.map(([position, rgb]) => [position, applyPaletteVibranceSaturation(rgb, saturation)]);
     }
   
     const selected = visualPreset.value;
-    return PRESET_PALETTES[selected] || PRESET_PALETTES.cinematic;
+    const base = PRESET_PALETTES[selected] || PRESET_PALETTES.cinematic;
+    const saturation = paletteSaturation ? Number(paletteSaturation.value) : 1;
+    if (!Number.isFinite(saturation) || Math.abs(saturation - 1) < 1e-4) {
+      return base;
+    }
+    return base.map(([position, rgb]) => [position, applyPaletteVibranceSaturation(rgb, saturation)]);
   }
   
   function colorFromMetric(valueKhz, range) {
@@ -988,6 +1162,8 @@ export function createAnalysisModule(runtime) {
       temporalEdges,
       knnEdges,
     };
+
+    applySongAwareFreqSpread(map);
   
     const metricInfo = activeMetricInfo();
     const range = metricInfo.rangeForMap(map);
@@ -1188,6 +1364,7 @@ export function createAnalysisModule(runtime) {
     }
   
     applyMapping(state.map.frames, mappingMode.value);
+    applySongAwareFreqSpread(state.map);
     state.trail = [];
     state.lastTrailIndex = -1;
     state.trailVelocity = 0;
@@ -1200,6 +1377,7 @@ export function createAnalysisModule(runtime) {
     buildTemporalEdges,
     buildKnnEdges,
     applyMapping,
+    applySongAwareFreqSpread,
     activePalette,
     colorFromMetric,
     activeMetricInfo,

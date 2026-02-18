@@ -102,6 +102,27 @@ Let `tNorm = i / (N-1)`.
 - `y = (yN - 0.5) * 20 + (rmsN - 0.5) * 3`
 - `z = (zN - 0.5) * 21 + (fluxN - 0.5) * 4`
 
+### Hybrid Flow mode
+
+- Build a curved timeline arc (`sin/cos`) and combine it with normalized PCA coordinates.
+- Blend favors structure on `x,z` and keeps stronger chronology on `y`.
+- Result: manifold clusters with an obvious chronological ribbon.
+
+### Helix Orbit mode
+
+- `angle = tNorm * (2*pi*turns) + flux offset`
+- `radius = base + spreadN + rmsN contribution`
+- `x,z` are strong polar projection (`cos/sin`) to create a visible spiral.
+- `y` is a taller timeline climb (larger vertical extent than Time Spine).
+
+### Song-aware spread auto-calibration
+
+When `Auto Spread by Song` is enabled:
+- compute mapped frame radial magnitude `sqrt(x^2 + z^2)` and take ~85th percentile
+- set geometry scale toward target visual radius near `20`
+- modulate by track spectral spread distribution (band + median)
+- clamp and snap to `freq-spread` slider range/step
+
 ## 5. Node Appearance
 
 Per frame defaults:

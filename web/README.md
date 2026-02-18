@@ -19,6 +19,7 @@ It can analyze audio in-browser or load backend-generated features for playback-
 - Backend persists `{song-name}.analysis.json` in cache (tmp by default), and reuses it for same file+settings.
 - Optional custom cache directory can be set directly in Session → Voice options (`Cache Folder`).
 - It stores to `localStorage` key `sgm.voice-cache-dir` and is sent as `cache_dir` on backend requests.
+- `Clear Cached Analyses` button calls backend cache clear API for prior voice-analysis outputs.
 - Manual `features.json` loading is still supported.
 
 ## Code Structure
@@ -37,6 +38,8 @@ It can analyze audio in-browser or load backend-generated features for playback-
 - mapping modes:
   - `Manifold (PCA)`
   - `Time Spine`
+  - `Hybrid Flow`
+  - `Helix Orbit`
 - temporal and kNN connectivity
 - edge styles:
   - `Wave` (playback/frequency-synced)
@@ -48,6 +51,9 @@ It can analyze audio in-browser or load backend-generated features for playback-
 - lower-right `H/S` focus toggle hides/restores all overlay windows for fullscreen display mode
 - camera presets plus manual orbit/pan/zoom
 - palette system with built-in and custom JSON palettes
+- `Auto Spread by Song` can recalibrate 3D spread per loaded track
+- optional `Math HUD` popup (hidden by default) with live FFT-derived descriptors plus file/pipeline metadata
+- Math HUD includes `AI Generated` only when explicit metadata/provenance provides it; otherwise it remains `Unknown`
 
 ## What Defines a Node
 
