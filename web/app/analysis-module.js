@@ -698,15 +698,114 @@ export function createAnalysisModule(runtime) {
       b: Math.round(lerp(left[1][2], right[1][2], local)),
     };
   }
+
+  function deriveMetricRange(map, valueForFrame, fallbackRange) {
+    if (!map || !Array.isArray(map.frames) || map.frames.length === 0 || typeof valueForFrame !== "function") {
+      return fallbackRange;
+    }
+
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const frame of map.frames) {
+      const value = Number(valueForFrame(frame));
+      if (!Number.isFinite(value)) {
+        continue;
+      }
+      if (value < min) {
+        min = value;
+      }
+      if (value > max) {
+        max = value;
+      }
+    }
+
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      return fallbackRange;
+    }
+
+    if (max - min < EPSILON) {
+      const padding = Math.max(0.01, Math.abs(max) * 0.05);
+      return {
+        min: min - padding,
+        max: max + padding,
+      };
+    }
+
+    return { min, max };
+  }
   
   function activeMetricInfo() {
-    const metric = colorMetric?.value === "peak" ? "peak" : "spread";
+    const metric = colorMetric?.value || "spread";
     if (metric === "peak") {
       return {
         key: "peak",
         legend: "Peak Frequency (kHz)",
         valueForFrame: (frame) => frame.peakHz / 1000,
-        rangeForMap: (map) => map?.peakRangeKhz || { min: 0, max: 8 },
+        rangeForMap: (map) => map?.peakRangeKhz || deriveMetricRange(map, (frame) => frame.peakHz / 1000, { min: 0, max: 8 }),
+      };
+    }
+
+    if (metric === "centroid") {
+      return {
+        key: "centroid",
+        legend: "Spectral Centroid (kHz)",
+        valueForFrame: (frame) => frame.centroidHz / 1000,
+        rangeForMap: (map) => deriveMetricRange(map, (frame) => frame.centroidHz / 1000, { min: 0, max: 8 }),
+      };
+    }
+
+    if (metric === "rolloff") {
+      return {
+        key: "rolloff",
+        legend: "Spectral Rolloff 85% (kHz)",
+        valueForFrame: (frame) => frame.rolloffHz / 1000,
+        rangeForMap: (map) => deriveMetricRange(map, (frame) => frame.rolloffHz / 1000, { min: 0, max: 12 }),
+      };
+    }
+
+    if (metric === "flux") {
+      return {
+        key: "flux",
+        legend: "Spectral Flux",
+        valueForFrame: (frame) => frame.flux,
+        rangeForMap: (map) => deriveMetricRange(map, (frame) => frame.flux, { min: 0, max: 1 }),
+      };
+    }
+
+    if (metric === "flatness") {
+      return {
+        key: "flatness",
+        legend: "Spectral Flatness",
+        valueForFrame: (frame) => frame.flatness,
+        rangeForMap: (map) => deriveMetricRange(map, (frame) => frame.flatness, { min: 0, max: 1 }),
+      };
+    }
+
+    if (metric === "tonality") {
+      return {
+        key: "tonality",
+        legend: "Tonality (1 - Flatness)",
+        valueForFrame: (frame) => 1 - frame.flatness,
+        rangeForMap: (map) => deriveMetricRange(map, (frame) => 1 - frame.flatness, { min: 0, max: 1 }),
+      };
+    }
+
+    if (metric === "rms") {
+      return {
+        key: "rms",
+        legend: "RMS Energy",
+        valueForFrame: (frame) => frame.rms,
+        rangeForMap: (map) => deriveMetricRange(map, (frame) => frame.rms, { min: 0, max: 1 }),
+      };
+    }
+
+    if (metric === "zcr") {
+      return {
+        key: "zcr",
+        legend: "Zero Crossing Rate",
+        valueForFrame: (frame) => frame.zcr,
+        rangeForMap: (map) => deriveMetricRange(map, (frame) => frame.zcr, { min: 0, max: 0.35 }),
       };
     }
   
@@ -714,7 +813,8 @@ export function createAnalysisModule(runtime) {
       key: "spread",
       legend: "Spectral Spread (kHz)",
       valueForFrame: (frame) => frame.spreadKhz,
-      rangeForMap: (map) => map?.spreadRangeKhz || { min: 0, max: 2.5 },
+      rangeForMap: (map) =>
+        map?.spreadRangeKhz || deriveMetricRange(map, (frame) => frame.spreadKhz, { min: 0, max: 2.5 }),
     };
   }
   
