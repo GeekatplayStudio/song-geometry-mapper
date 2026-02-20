@@ -444,8 +444,11 @@ export function createRenderModule(runtime) {
     }
   
     const density = Number(flowDensity.value);
-    const particleCount = Math.floor(14 + density * 70);
-    const pathLength = Math.min(340, activeIndex);
+    const perfMs = Number(state.renderEmaMs || 16.7);
+    const perfLoad = clamp((perfMs - 16.7) / 16, 0, 1);
+    const particleBudget = 1 - perfLoad * 0.45;
+    const particleCount = Math.max(8, Math.floor((14 + density * 70) * particleBudget));
+    const pathLength = Math.min(340, Math.max(40, Math.floor(activeIndex * (1 - perfLoad * 0.12))));
     const speed = 0.25 + Number(motionStrength.value) * 0.42;
   
     ctx.save();
@@ -509,6 +512,16 @@ export function createRenderModule(runtime) {
     const solidness = Number(edgeSolidness.value);
     const neighborVisibility = Number(knnBoost.value);
     const window = 6 + Number(flowDensity.value) * 18;
+    const motionValue = Number(motionStrength.value);
+    const waveAmpBoost = Number(waveAmplification?.value || 1);
+    const ribbonWaveSpeedBoost = Number(edgeRibbonWaveSpeed?.value || 1);
+    const ribbonFlexibility = Number(edgeRibbonFlexibility?.value || 1);
+    const ribbonSoftness = Number(edgeRibbonSoftness?.value || 0.55);
+    const nodeHitPulseStrength = Number(nodeHitPulse.value);
+    const perfMs = Number(state.renderEmaMs || 16.7);
+    const perfLoad = clamp((perfMs - 16.7) / 14, 0, 1);
+    const edgeVisibilityCutoff = 0.012 + perfLoad * 0.01;
+    const useUsageHeat = perfLoad < 0.88;
     const cinemaBoost = cinemaMode.checked ? 1.15 : 0.72;
     const glowShiftAmt = Number(glowShift.value);
     const idleVisibility = activeIndex < 0 ? 0.52 : 1;
@@ -546,7 +559,7 @@ export function createRenderModule(runtime) {
     const edgeKey = (prefix, a, b) => (a <= b ? `${prefix}:${a}:${b}` : `${prefix}:${b}:${a}`);
 
     const registerConnectionUsage = (key, activity) => {
-      if (player.paused || !key) {
+      if (player.paused || !key || !useUsageHeat) {
         return;
       }
       const current = state.connectionUsage.get(key) || 0;
@@ -559,6 +572,9 @@ export function createRenderModule(runtime) {
     };
 
     const connectionColorByUsage = (baseColor, key, activity) => {
+      if (!useUsageHeat || !key) {
+        return baseColor;
+      }
       const maxUsage = Math.max(0.0001, state.connectionUsageMax || 0);
       const usage = state.connectionUsage.get(key) || 0;
       const usageNorm = clamp(usage / maxUsage, 0, 1);
@@ -568,7 +584,7 @@ export function createRenderModule(runtime) {
     };
   
     const drawCometSegmentWave = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB, freqFactor) => {
-      const phase = (playbackTime * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
+      const phase = (playbackTime * (0.65 + motionValue * 0.24) + phaseSeed) % 1;
       const lenRatio = clamp(trailLength * (0.45 + activity * 0.9), 0.16, 1);
       const t1 = phase;
       const t0 = Math.max(0, t1 - lenRatio);
@@ -588,9 +604,8 @@ export function createRenderModule(runtime) {
   
       // Wave properties are synced to current playback frequency.
       const waveFreq = 1.1 + freqFactor * 9.5;
-      const waveAmpBoost = Number(waveAmplification?.value || 1);
       const waveAmp = Math.min(dist * 0.2, (1.25 + freqFactor * 3.9) * (0.42 + activity * 1.15) * waveAmpBoost);
-      const waveSpeed = 0.55 + freqFactor * 2.2 + Number(motionStrength.value) * 0.55;
+      const waveSpeed = 0.55 + freqFactor * 2.2 + motionValue * 0.55;
   
       const getWavePoint = (t) => {
         const lx = ax + dx * t;
@@ -653,15 +668,15 @@ export function createRenderModule(runtime) {
       ctx.stroke();
   
       if (t1 > 0.94) {
-        registerConnectionPulse(edgeB, clamp(activity * Number(nodeHitPulse.value), 0, 2.8));
+        registerConnectionPulse(edgeB, clamp(activity * nodeHitPulseStrength, 0, 2.8));
       }
       if (t0 < 0.06) {
-        registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
+        registerConnectionPulse(edgeA, clamp(activity * nodeHitPulseStrength * 0.7, 0, 2.8));
       }
     };
   
     const drawCometSegmentLine = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB) => {
-      const phase = (playbackTime * (0.65 + Number(motionStrength.value) * 0.24) + phaseSeed) % 1;
+      const phase = (playbackTime * (0.65 + motionValue * 0.24) + phaseSeed) % 1;
       const len = clamp(trailLength * (0.45 + activity * 0.9), 0.16, 1);
       const t1 = phase;
       const t0 = Math.max(0, t1 - len);
@@ -699,15 +714,15 @@ export function createRenderModule(runtime) {
       ctx.stroke();
   
       if (t1 > 0.94) {
-        registerConnectionPulse(edgeB, clamp(activity * Number(nodeHitPulse.value), 0, 2.8));
+        registerConnectionPulse(edgeB, clamp(activity * nodeHitPulseStrength, 0, 2.8));
       }
       if (t0 < 0.06) {
-        registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
+        registerConnectionPulse(edgeA, clamp(activity * nodeHitPulseStrength * 0.7, 0, 2.8));
       }
     };
   
     const drawCometSegmentCurve = (a, b, cx, cy, color, alpha, width, phaseSeed, activity, edgeA, edgeB) => {
-      const phase = (playbackTime * (0.62 + Number(motionStrength.value) * 0.22) + phaseSeed) % 1;
+      const phase = (playbackTime * (0.62 + motionValue * 0.22) + phaseSeed) % 1;
       const len = clamp(trailLength * (0.42 + activity * 0.95), 0.14, 1);
       const t1 = phase;
       const t0 = Math.max(0, t1 - len);
@@ -754,15 +769,15 @@ export function createRenderModule(runtime) {
       ctx.stroke();
   
       if (t1 > 0.94) {
-        registerConnectionPulse(edgeB, clamp(activity * Number(nodeHitPulse.value), 0, 2.8));
+        registerConnectionPulse(edgeB, clamp(activity * nodeHitPulseStrength, 0, 2.8));
       }
       if (t0 < 0.06) {
-        registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
+        registerConnectionPulse(edgeA, clamp(activity * nodeHitPulseStrength * 0.7, 0, 2.8));
       }
     };
 
     const drawCometSegmentRibbon = (ax, ay, bx, by, color, alpha, width, phaseSeed, activity, edgeA, edgeB, freqFactor) => {
-      const phase = (playbackTime * (0.62 + Number(motionStrength.value) * 0.22) + phaseSeed) % 1;
+      const phase = (playbackTime * (0.62 + motionValue * 0.22) + phaseSeed) % 1;
       const lenRatio = clamp(trailLength * (0.42 + activity * 0.98), 0.14, 1);
       const t1 = phase;
       const t0 = Math.max(0, t1 - lenRatio);
@@ -780,9 +795,6 @@ export function createRenderModule(runtime) {
       const py = nx;
 
       const waveFreq = 0.95 + freqFactor * 7.6;
-      const waveAmpBoost = Number(waveAmplification?.value || 1);
-      const ribbonWaveSpeedBoost = Number(edgeRibbonWaveSpeed?.value || 1);
-      const ribbonFlexibility = Number(edgeRibbonFlexibility?.value || 1);
       const musicShape = clamp(
         ((liveFrame?.peakN ?? freqFactor) * 0.64 + (liveFrame?.centroidN ?? freqFactor) * 0.36),
         0,
@@ -795,9 +807,8 @@ export function createRenderModule(runtime) {
           * (0.28 + activity * (0.78 + ribbonFlexibility * 0.35))
           * waveAmpBoost,
       );
-      const waveSpeed = (0.35 + freqFactor * 1.7 + Number(motionStrength.value) * 0.44) * ribbonWaveSpeedBoost;
+      const waveSpeed = (0.35 + freqFactor * 1.7 + motionValue * 0.44) * ribbonWaveSpeedBoost;
       const ribbonHalfWidth = Math.max(1.05, width * (0.74 + activity * 0.86));
-      const ribbonSoftness = Number(edgeRibbonSoftness?.value || 0.55);
 
       const centerPoint = (t) => {
         const lx = ax + dx * t;
@@ -886,10 +897,10 @@ export function createRenderModule(runtime) {
       ctx.fill();
 
       if (t1 > 0.94) {
-        registerConnectionPulse(edgeB, clamp(activity * Number(nodeHitPulse.value), 0, 2.8));
+        registerConnectionPulse(edgeB, clamp(activity * nodeHitPulseStrength, 0, 2.8));
       }
       if (t0 < 0.06) {
-        registerConnectionPulse(edgeA, clamp(activity * Number(nodeHitPulse.value) * 0.7, 0, 2.8));
+        registerConnectionPulse(edgeA, clamp(activity * nodeHitPulseStrength * 0.7, 0, 2.8));
       }
     };
   
@@ -912,9 +923,12 @@ export function createRenderModule(runtime) {
         );
   
         const alpha = clamp((0.04 + activity * 0.42) * edgeStrength * edgeLightBoost * cinemaBoost * idleVisibility, 0.01, 0.96);
+        if (alpha < edgeVisibilityCutoff && activity < 0.06) {
+          continue;
+        }
         const width = (0.52 + activity * 2.25) * edgeThicknessBoost;
         const baseColor = activity > 0.04 ? b.frame.color : { r: 105, g: 118, b: 138 };
-        const usageKey = edgeKey("t", edgeA, edgeB);
+        const usageKey = useUsageHeat ? edgeKey("t", edgeA, edgeB) : "";
         registerConnectionUsage(usageKey, activity);
         const color = connectionColorByUsage(baseColor, usageKey, activity);
         const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
@@ -950,7 +964,7 @@ export function createRenderModule(runtime) {
             freqFactor,
           );
         } else {
-          const curve = (0.08 + Number(motionStrength.value) * 0.07 + activity * 0.28) * Math.sin(playbackTime * 0.8 + edgeA * 0.02);
+          const curve = (0.08 + motionValue * 0.07 + activity * 0.28) * Math.sin(playbackTime * 0.8 + edgeA * 0.02);
           const cx = (a.x + b.x) * 0.5 + (b.y - a.y) * curve;
           const cy = (a.y + b.y) * 0.5 - (b.x - a.x) * curve;
           drawCometSegmentCurve(a, b, cx, cy, color, alpha, width, edgeA * 0.019 + edgeB * 0.013, activity, edgeA, edgeB);
@@ -959,7 +973,9 @@ export function createRenderModule(runtime) {
     }
   
     if (mode === "knn" || mode === "both") {
-      const stride = state.map.knnEdges.length > 6200 ? 2 : 1;
+      const baseStride = state.map.knnEdges.length > 6200 ? 2 : 1;
+      const adaptiveStrideBoost = perfLoad > 0.72 ? 2 : perfLoad > 0.42 ? 1 : 0;
+      const stride = baseStride + adaptiveStrideBoost;
   
       for (let i = 0; i < state.map.knnEdges.length; i += stride) {
         const edge = state.map.knnEdges[i];
@@ -983,8 +999,11 @@ export function createRenderModule(runtime) {
           0.008,
           0.95,
         );
+        if (alpha < edgeVisibilityCutoff) {
+          continue;
+        }
         const width = (0.5 + edge.weight * 1.42 * neighborVisibility + activity * 1.2) * edgeThicknessBoost;
-        const usageKey = edgeKey("k", edge.a, edge.b);
+        const usageKey = useUsageHeat ? edgeKey("k", edge.a, edge.b) : "";
         registerConnectionUsage(usageKey, activity);
         const edgeColor = connectionColorByUsage(b.frame.color, usageKey, activity);
         const freqFactor = edgeFrequencyFactor(a.frame, b.frame, liveFrame, activity);
@@ -1046,7 +1065,10 @@ export function createRenderModule(runtime) {
     }
   
     const dpr = Math.max(1, state.dpr || 1);
-    const densityMap = buildLocalDensityMap(projected, Math.max(22 * dpr, 52));
+    const perfMs = Number(state.renderEmaMs || 16.7);
+    const perfLoad = clamp((perfMs - 16.7) / 16, 0, 1);
+    const densityCell = Math.max(22 * dpr, 52) * (1 + perfLoad * 0.25);
+    const densityMap = buildLocalDensityMap(projected, densityCell);
   
     const ranked = [...projected]
       .map((item) => ({
@@ -1055,8 +1077,10 @@ export function createRenderModule(runtime) {
       }))
       .sort((a, b) => b.score - a.score);
   
-    const stableCount = Math.min(56, ranked.length);
-    const activeCount = Math.min(86, ranked.length);
+    const stableBudget = clamp(1 - perfLoad * 0.35, 0.6, 1);
+    const activeBudget = clamp(1 - perfLoad * 0.3, 0.65, 1);
+    const stableCount = Math.min(Math.max(22, Math.floor(56 * stableBudget)), ranked.length);
+    const activeCount = Math.min(Math.max(30, Math.floor(86 * activeBudget)), ranked.length);
   
     ctx.save();
     ctx.globalCompositeOperation = "source-over";
@@ -1296,6 +1320,7 @@ export function createRenderModule(runtime) {
     const pointDepthAmount = Number(pointDepth.value);
     const pulseControl = Number(pulseStrength.value);
     const motion = Number(motionStrength.value);
+    const motionNorm = clamp(motion / 3, 0, 1);
     const bg = PRESET_BACKGROUND[visualPreset.value] || PRESET_BACKGROUND.cinematic;
     const atmosphereColor = { r: bg.aura[0], g: bg.aura[1], b: bg.aura[2] };
   
@@ -1316,6 +1341,14 @@ export function createRenderModule(runtime) {
       const px = item.x;
       const py = item.y;
       const radius = Math.max(0.55, item.radius * (0.74 + item.activity * 0.18) * pulseScale);
+      const tinyFastPath = radius < 1.35 && pulseEnvelope < 0.08 && item.activity < 0.1;
+      if (tinyFastPath) {
+        ctx.fillStyle = rgba(baseColor, clamp(baseAlpha * (0.86 + solidness * 0.2), 0.06, 0.9).toFixed(3));
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
   
       const sphereGradient = ctx.createRadialGradient(
         px - radius * (0.3 + pointDepthAmount * 0.12),
@@ -1370,7 +1403,7 @@ export function createRenderModule(runtime) {
   
       const tailColor = shiftToInfra(
         item.frame.color,
-        clamp(glowShiftAmt * (0.22 + (1 - clamp(Number(motionStrength.value) / 3, 0, 1)) * 0.56), 0, 1),
+        clamp(glowShiftAmt * (0.22 + (1 - motionNorm) * 0.56), 0, 1),
       );
   
       const gradient = ctx.createRadialGradient(px, py, 0, px, py, glowRadius);

@@ -222,6 +222,8 @@ export function createRuntime() {
     lastTrailIndex: -1,
     lastPlaybackTime: 0,
     lastFrameAt: performance.now(),
+    frameDtMs: 16.7,
+    renderEmaMs: 16.7,
     userYaw: 0,
     userPitch: 0.2,
     userZoom: 1,

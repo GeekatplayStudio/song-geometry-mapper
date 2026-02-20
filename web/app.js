@@ -849,24 +849,46 @@ function bindEvents() {
   window.addEventListener("resize", resizeCanvas);
 
   window.addEventListener("keydown", (event) => {
-    if (event.code !== "Space") {
-      return;
-    }
-
     const activeElement = document.activeElement;
     const tag = activeElement && typeof activeElement.tagName === "string" ? activeElement.tagName : "";
     if (["INPUT", "TEXTAREA", "SELECT"].includes(tag)) {
       return;
     }
 
-    event.preventDefault();
-    handlePlaybackToggle();
+    if (event.code === "Space") {
+      event.preventDefault();
+      handlePlaybackToggle();
+      return;
+    }
+
+    const step = event.shiftKey ? 0.04 : 0.02;
+    if (event.code === "ArrowLeft") {
+      event.preventDefault();
+      state.userPanX = clamp(state.userPanX - step, -0.35, 0.35);
+      return;
+    }
+    if (event.code === "ArrowRight") {
+      event.preventDefault();
+      state.userPanX = clamp(state.userPanX + step, -0.35, 0.35);
+      return;
+    }
+    if (event.code === "ArrowUp") {
+      event.preventDefault();
+      state.userPanY = clamp(state.userPanY - step, -0.35, 0.35);
+      return;
+    }
+    if (event.code === "ArrowDown") {
+      event.preventDefault();
+      state.userPanY = clamp(state.userPanY + step, -0.35, 0.35);
+    }
   });
 }
 
 function tick(nowMs) {
   const dtMs = clamp(nowMs - state.lastFrameAt, 4, 50);
   state.lastFrameAt = nowMs;
+  state.frameDtMs = dtMs;
+  state.renderEmaMs = state.renderEmaMs ? state.renderEmaMs * 0.9 + dtMs * 0.1 : dtMs;
 
   const nowSec = nowMs * 0.001;
   updateSupportButtonTheme(nowSec);
