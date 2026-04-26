@@ -67,6 +67,8 @@ const {
   createStars,
   refreshCustomPresetOptions,
   recolorFrames,
+  readCurrentControlSettings,
+  applyControlSettings,
   loadCustomPaletteFromFile,
   clearCustomPalette,
   applyCustomPresetByName,
@@ -98,6 +100,91 @@ const {
   FFT_SIZE,
   HOP_SIZE,
 } = runtime;
+
+const BUILTIN_VISUAL_PROFILES = {
+  observatory: {
+    "observatory-overlay": true,
+    "cathedral-overlay": false,
+    "camera-preset": "drift",
+    "edge-style": "line",
+    "edge-opacity": "0.39",
+    "edge-brightness": "1.2",
+    "edge-width-boost": "0.94",
+    "edge-solidness": "0.58",
+    "trail-persistence": "0.9",
+    "trail-flare": "0.42",
+    "flow-density": "0.22",
+    "show-flow-arrows": false,
+    "motion-strength": "0.8",
+    "motion-blur": "0.14",
+    "rotation-speed": "0.045",
+    "pulse-strength": "0.9",
+    "node-hit-pulse": "1.0",
+    "point-scale": "1.82",
+    "point-opacity": "0.66",
+    "point-solidness": "0.56",
+    "point-depth": "1.05",
+    "bloom-strength": "0.42",
+    "glow-intensity": "0.48",
+    "glow-threshold": "0.22",
+    "glow-shift": "0.28",
+    "glow-decay": "1.02",
+    "fog-strength": "0.28",
+    "lens-flare-strength": "0.16",
+    "lens-streak-strength": "0.12",
+    "color-metric": "centroid",
+    "palette-saturation": "0.94",
+    "show-connections": true,
+    "show-labels": true,
+    "cinema-mode": true,
+  },
+  cathedral: {
+    "observatory-overlay": false,
+    "cathedral-overlay": true,
+    "camera-preset": "orbit",
+    "edge-style": "ribbon",
+    "edge-opacity": "0.44",
+    "edge-brightness": "1.16",
+    "edge-width-boost": "1.12",
+    "edge-ribbon-softness": "0.74",
+    "edge-ribbon-wave-speed": "0.76",
+    "edge-ribbon-flexibility": "0.86",
+    "edge-solidness": "0.68",
+    "trail-persistence": "0.94",
+    "trail-flare": "0.96",
+    "flow-density": "0.34",
+    "show-flow-arrows": false,
+    "motion-strength": "0.92",
+    "motion-blur": "0.18",
+    "rotation-speed": "0.13",
+    "pulse-strength": "1.08",
+    "node-hit-pulse": "1.22",
+    "point-scale": "1.96",
+    "point-opacity": "0.69",
+    "point-solidness": "0.62",
+    "point-depth": "1.09",
+    "bloom-strength": "0.6",
+    "glow-intensity": "0.66",
+    "glow-threshold": "0.18",
+    "glow-shift": "0.36",
+    "glow-decay": "1.16",
+    "fog-strength": "0.48",
+    "lens-flare-strength": "0.26",
+    "lens-streak-strength": "0.2",
+    "color-metric": "tonality",
+    "palette-saturation": "1.02",
+    "show-connections": true,
+    "show-labels": false,
+    "cinema-mode": true,
+  },
+};
+
+const BUILTIN_VISUAL_PROFILE_KEYS = [...new Set(
+  Object.values(BUILTIN_VISUAL_PROFILES).flatMap((profile) => Object.keys(profile)),
+)];
+
+let activeBuiltinVisualProfile = null;
+let builtinVisualProfileSnapshot = null;
 
 const mathPanelEls = {
   toggleBtn: document.getElementById("toggle-math-panel"),
@@ -508,6 +595,83 @@ function bindEvents() {
     refreshSpreadUi();
   }
 
+  function clearBuiltinVisualProfileState() {
+    activeBuiltinVisualProfile = null;
+    builtinVisualProfileSnapshot = null;
+  }
+
+  function captureBuiltinVisualProfileSnapshot() {
+    if (builtinVisualProfileSnapshot || !readCurrentControlSettings) {
+      return;
+    }
+
+    const currentSettings = readCurrentControlSettings();
+    const snapshot = {};
+    for (const key of BUILTIN_VISUAL_PROFILE_KEYS) {
+      if (key in currentSettings) {
+        snapshot[key] = currentSettings[key];
+      }
+    }
+    builtinVisualProfileSnapshot = snapshot;
+  }
+
+  function refreshVisualControlLabels() {
+    refreshSpreadUi();
+    updatePaletteSaturationLabel();
+  }
+
+  function applyBuiltinVisualProfile(presetName) {
+    const profile = BUILTIN_VISUAL_PROFILES[presetName];
+    if (!profile || !applyControlSettings) {
+      return false;
+    }
+
+    if (!activeBuiltinVisualProfile) {
+      captureBuiltinVisualProfileSnapshot();
+    }
+
+    activeBuiltinVisualProfile = presetName;
+    applyControlSettings(profile);
+    state.autoYaw = 0;
+    refreshVisualControlLabels();
+    if (customPresetSelect) {
+      customPresetSelect.value = "";
+    }
+    return true;
+  }
+
+  function restoreBuiltinVisualProfileBase() {
+    if (!activeBuiltinVisualProfile || !builtinVisualProfileSnapshot || !applyControlSettings) {
+      clearBuiltinVisualProfileState();
+      return false;
+    }
+
+    applyControlSettings(builtinVisualProfileSnapshot);
+    state.autoYaw = 0;
+    refreshVisualControlLabels();
+    clearBuiltinVisualProfileState();
+    if (customPresetSelect) {
+      customPresetSelect.value = "";
+    }
+    return true;
+  }
+
+  function handleVisualPresetChange() {
+    const selectedPreset = visualPreset ? visualPreset.value : "";
+    if (selectedPreset && applyBuiltinVisualProfile(selectedPreset)) {
+      return;
+    }
+
+    if (restoreBuiltinVisualProfileBase()) {
+      return;
+    }
+
+    recolorFrames();
+    if (customPresetSelect) {
+      customPresetSelect.value = "";
+    }
+  }
+
   function loadFileFromInput(file) {
     if (!file) {
       return Promise.resolve();
@@ -739,7 +903,7 @@ function bindEvents() {
   }
 
   if (visualPreset) {
-    visualPreset.addEventListener("change", recolorFrames);
+    visualPreset.addEventListener("change", handleVisualPresetChange);
   }
   if (colorMetric) {
     colorMetric.addEventListener("change", recolorFrames);
@@ -761,6 +925,7 @@ function bindEvents() {
   if (customPresetSelect) {
     customPresetSelect.addEventListener("change", () => {
       applyCustomPresetByName(customPresetSelect.value);
+      clearBuiltinVisualProfileState();
       refreshSpreadUi();
       updatePaletteSaturationLabel();
     });

@@ -39,7 +39,7 @@ if not exist .venv (
 call .venv\Scripts\activate.bat
 echo [INFO] Installing dependencies...
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install -c constraints.txt -r requirements.txt
 
 REM Check for Demucs availability
 python -c "import demucs" >nul 2>&1

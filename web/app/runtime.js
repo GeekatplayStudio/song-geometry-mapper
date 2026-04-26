@@ -53,6 +53,8 @@ export function createRuntime() {
   const rotationSpeed = document.getElementById("rotation-speed");
   
   const visualPreset = document.getElementById("visual-preset");
+  const observatoryOverlay = document.getElementById("observatory-overlay");
+  const cathedralOverlay = document.getElementById("cathedral-overlay");
   const customPresetSelect = document.getElementById("custom-preset-select");
   const customPresetName = document.getElementById("custom-preset-name");
   const saveCustomPresetBtn = document.getElementById("save-custom-preset");
@@ -153,6 +155,22 @@ export function createRuntime() {
       [0.76, [98, 236, 124]],
       [1.0, [255, 252, 134]],
     ],
+    observatory: [
+      [0.0, [42, 78, 112]],
+      [0.18, [74, 126, 162]],
+      [0.38, [112, 172, 182]],
+      [0.6, [192, 182, 126]],
+      [0.82, [233, 161, 96]],
+      [1.0, [247, 236, 204]],
+    ],
+    cathedral: [
+      [0.0, [32, 44, 88]],
+      [0.18, [66, 96, 164]],
+      [0.38, [122, 154, 214]],
+      [0.58, [196, 184, 198]],
+      [0.8, [240, 194, 142]],
+      [1.0, [255, 244, 220]],
+    ],
     aurora: [
       [0.0, [66, 232, 214]],
       [0.2, [104, 186, 255]],
@@ -192,6 +210,8 @@ export function createRuntime() {
     scientific: { core: [9, 13, 20], aura: [22, 38, 60], vignette: [2, 3, 6] },
     neon: { core: [11, 12, 26], aura: [44, 25, 73], vignette: [3, 3, 9] },
     "cinematic-plus": { core: [8, 12, 24], aura: [36, 52, 86], vignette: [2, 3, 7] },
+    observatory: { core: [7, 13, 18], aura: [24, 70, 86], vignette: [2, 5, 7] },
+    cathedral: { core: [8, 10, 18], aura: [66, 54, 96], vignette: [3, 2, 7] },
     aurora: { core: [6, 14, 22], aura: [18, 64, 86], vignette: [2, 5, 9] },
     sunset: { core: [14, 10, 24], aura: [66, 30, 44], vignette: [4, 2, 8] },
     arctic: { core: [8, 16, 22], aura: [20, 54, 66], vignette: [2, 6, 8] },
@@ -379,6 +399,8 @@ export function createRuntime() {
     motionBlur,
     rotationSpeed,
     visualPreset,
+    observatoryOverlay,
+    cathedralOverlay,
     customPresetSelect,
     customPresetName,
     saveCustomPresetBtn,

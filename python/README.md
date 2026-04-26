@@ -18,6 +18,9 @@ When stem separation is enabled, each requested stem gets its own output folder 
 
 ## Installation
 
+`constraints.txt` pins the validated dependency resolution used by local setup.
+Docker builds use `constraints-docker.txt` to keep `demucs` available with CPU-only PyTorch wheels.
+
 ### Docker
 
 From repo root:
@@ -32,7 +35,7 @@ From `python/`:
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+python -m pip install -c constraints.txt -r requirements.txt
 python -m pytest -q
 ```
 
@@ -150,6 +153,7 @@ python -m pytest
 ## Related Docs
 
 - project front page: `../README.md`
+- preservation baseline: `../docs/PRESERVATION.md`
 - algorithm details: `../docs/ALGORITHMS.md`
 - research references: `../docs/RESEARCH.md`
 - license: `../LICENSE`

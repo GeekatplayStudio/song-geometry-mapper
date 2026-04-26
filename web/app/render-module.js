@@ -22,6 +22,8 @@ export function createRenderModule(runtime) {
     motionStrength,
     rotationSpeed,
     cameraPreset,
+    observatoryOverlay,
+    cathedralOverlay,
     freqSpread,
     offsetX,
     offsetY,
@@ -1137,6 +1139,261 @@ export function createRenderModule(runtime) {
     ctx.restore();
   }
 
+    function rankSceneOverlayAnchors(projected, activeIndex, perfLoad) {
+      const dpr = Math.max(1, state.dpr || 1);
+      const densityCell = Math.max(24 * dpr, 58) * (1 + perfLoad * 0.25);
+      const densityMap = buildLocalDensityMap(projected, densityCell);
+
+      return projected
+        .map((item) => {
+          const localDensity = densityMap.get(item.index) || 1;
+          const densityScale = clamp(1 / Math.sqrt(Math.max(1, localDensity)), 0.28, 1);
+          const focus = activeIndex >= 0 ? activityForIndex(item.index, activeIndex, 10) : 0;
+          return {
+            item,
+            densityScale,
+            focus,
+            score:
+              item.radius * (1.1 + item.frame.rmsN * 0.92 + item.activity * 1.18 + focus * 1.28) +
+              densityScale * 14,
+          };
+        })
+        .sort((a, b) => b.score - a.score);
+    }
+
+    function drawObservatoryOverlay(projected, activeIndex, nowSec) {
+      const overlayEnabled = visualPreset.value === "observatory" || Boolean(observatoryOverlay?.checked);
+      if (!overlayEnabled || projected.length === 0) {
+        return;
+      }
+
+      const dpr = Math.max(1, state.dpr || 1);
+      const perfMs = Number(state.renderEmaMs || 16.7);
+      const perfLoad = clamp((perfMs - 16.7) / 18, 0, 1);
+      const ranked = rankSceneOverlayAnchors(projected, activeIndex, perfLoad);
+      const anchorCount = Math.min(
+        Math.max(5, Math.round(9 * (1 - perfLoad * 0.25))),
+        ranked.length,
+      );
+      const anchors = ranked.slice(0, anchorCount);
+      const sceneBackground = PRESET_BACKGROUND.observatory;
+      const auraColor = { r: sceneBackground.aura[0], g: sceneBackground.aura[1], b: sceneBackground.aura[2] };
+      const chartAccent = { r: 247, g: 235, b: 197 };
+      const presetBoost = visualPreset.value === "observatory" ? 1 : 0.82;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.lineCap = "round";
+
+      for (const entry of anchors) {
+        const { item, densityScale, focus } = entry;
+        const sweep = Math.sin(nowSec * 0.68 + item.index * 0.11) * 0.5 + 0.5;
+        const baseRadius = clamp(
+          item.radius * (2.4 + densityScale * 7.6 + focus * 2.2) * presetBoost,
+          12 * dpr,
+          Math.min(state.width, state.height) * 0.14,
+        );
+        const tintBase = mixColor(item.frame.color, auraColor, 0.38);
+        const tintAccent = mixColor(item.frame.color, chartAccent, 0.42);
+        const alpha = clamp(
+          (0.026 + densityScale * 0.05 + focus * 0.14 + (visualPreset.value === "observatory" ? 0.035 : 0)) * presetBoost,
+          0.022,
+          0.18,
+        );
+
+        const haloRadius = baseRadius * (1.18 + sweep * 0.12);
+        const halo = ctx.createRadialGradient(item.x, item.y, 0, item.x, item.y, haloRadius);
+        halo.addColorStop(0, rgba(tintBase, clamp(alpha * 0.5, 0.01, 0.08).toFixed(3)));
+        halo.addColorStop(0.45, rgba(tintBase, clamp(alpha * 0.22, 0.01, 0.04).toFixed(3)));
+        halo.addColorStop(1, rgba(tintBase, 0));
+        ctx.fillStyle = halo;
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, haloRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.setLineDash([
+          Math.max(8 * dpr, baseRadius * 0.18),
+          Math.max(12 * dpr, baseRadius * 0.14),
+        ]);
+        ctx.strokeStyle = rgba(tintBase, alpha.toFixed(3));
+        ctx.lineWidth = Math.max(0.85 * dpr, (0.72 + densityScale * 0.8 + focus * 1.0) * dpr);
+        const orbitStart = nowSec * 0.14 + item.index * 0.039;
+        const orbitSpan = Math.PI * (0.68 + sweep * 0.42 + focus * 0.24);
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, baseRadius, orbitStart, orbitStart + orbitSpan);
+        ctx.stroke();
+
+        ctx.setLineDash([
+          Math.max(4 * dpr, baseRadius * 0.1),
+          Math.max(14 * dpr, baseRadius * 0.18),
+        ]);
+        ctx.strokeStyle = rgba(tintAccent, clamp(alpha * 0.84, 0.03, 0.14).toFixed(3));
+        ctx.lineWidth = Math.max(0.48 * dpr, (0.45 + densityScale * 0.56) * dpr);
+        const innerStart = -nowSec * 0.22 + item.index * 0.031;
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, baseRadius * 0.62, innerStart, innerStart + Math.PI * (0.44 + focus * 0.48));
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        const satelliteAngle = orbitStart + orbitSpan * (0.26 + sweep * 0.3);
+        const satelliteRadius = baseRadius + 1.5 * dpr;
+        ctx.fillStyle = rgba(tintAccent, clamp(alpha * (0.9 + focus * 0.28), 0.03, 0.18).toFixed(3));
+        ctx.beginPath();
+        ctx.arc(
+          item.x + Math.cos(satelliteAngle) * satelliteRadius,
+          item.y + Math.sin(satelliteAngle) * satelliteRadius,
+          Math.max(1.2 * dpr, (1.0 + densityScale * 1.1 + focus * 0.9) * dpr),
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+
+        const sweepAngle = nowSec * 0.74 + item.index * 0.064;
+        const sweepRadius = baseRadius * (0.72 + sweep * 0.22);
+        ctx.strokeStyle = rgba(tintAccent, clamp(alpha * (0.62 + focus * 0.28), 0.025, 0.12).toFixed(3));
+        ctx.lineWidth = Math.max(0.35 * dpr, (0.4 + focus * 0.55) * dpr);
+        ctx.beginPath();
+        ctx.moveTo(item.x, item.y);
+        ctx.lineTo(
+          item.x + Math.cos(sweepAngle) * sweepRadius,
+          item.y + Math.sin(sweepAngle) * sweepRadius,
+        );
+        ctx.stroke();
+
+        if (focus > 0.18) {
+          const pulseRadius = baseRadius * (1.04 + sweep * 0.12);
+          ctx.strokeStyle = rgba(tintAccent, clamp(alpha * 0.55, 0.02, 0.11).toFixed(3));
+          ctx.lineWidth = Math.max(0.55 * dpr, 0.8 * dpr);
+          ctx.beginPath();
+          ctx.arc(item.x, item.y, pulseRadius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+    }
+
+    function drawCathedralOverlay(projected, activeIndex, nowSec) {
+      const overlayEnabled = visualPreset.value === "cathedral" || Boolean(cathedralOverlay?.checked);
+      if (!overlayEnabled || projected.length === 0) {
+        return;
+      }
+
+      const dpr = Math.max(1, state.dpr || 1);
+      const perfMs = Number(state.renderEmaMs || 16.7);
+      const perfLoad = clamp((perfMs - 16.7) / 18, 0, 1);
+      const ranked = rankSceneOverlayAnchors(projected, activeIndex, perfLoad);
+      const anchorCount = Math.min(
+        Math.max(5, Math.round(8 * (1 - perfLoad * 0.22))),
+        ranked.length,
+      );
+      const anchors = ranked.slice(0, anchorCount).sort((a, b) => a.item.x - b.item.x);
+      const sceneBackground = PRESET_BACKGROUND.cathedral;
+      const auraColor = { r: sceneBackground.aura[0], g: sceneBackground.aura[1], b: sceneBackground.aura[2] };
+      const goldAccent = { r: 255, g: 229, b: 186 };
+      const vaultY = state.height * (0.16 + Math.sin(nowSec * 0.22) * 0.018);
+      const floorY = state.height * 0.84;
+      const sceneBoost = visualPreset.value === "cathedral" ? 1 : 0.84;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.lineCap = "round";
+
+      for (const entry of anchors) {
+        const { item, densityScale, focus } = entry;
+        const sway = Math.sin(nowSec * 0.34 + item.index * 0.09) * 8 * dpr;
+        const archLift = clamp(item.radius * (3.2 + densityScale * 7.2 + focus * 2.1), 16 * dpr, state.height * 0.18);
+        const tintBase = mixColor(item.frame.color, auraColor, 0.42);
+        const tintAccent = mixColor(item.frame.color, goldAccent, 0.38);
+        const alpha = clamp(
+          (0.028 + densityScale * 0.048 + focus * 0.15 + (visualPreset.value === "cathedral" ? 0.038 : 0)) * sceneBoost,
+          0.022,
+          0.19,
+        );
+
+        const apexX = lerp(item.x, state.width * 0.5, 0.12 + densityScale * 0.08) + sway;
+        const beam = ctx.createLinearGradient(item.x, item.y, apexX, vaultY);
+        beam.addColorStop(0, rgba(tintAccent, clamp(alpha * 0.92, 0.02, 0.18).toFixed(3)));
+        beam.addColorStop(0.58, rgba(tintBase, clamp(alpha * 0.44, 0.015, 0.08).toFixed(3)));
+        beam.addColorStop(1, rgba(tintBase, 0));
+        ctx.strokeStyle = beam;
+        ctx.lineWidth = Math.max(0.7 * dpr, (0.7 + densityScale * 0.75 + focus * 0.95) * dpr);
+        ctx.beginPath();
+        ctx.moveTo(item.x, item.y - item.radius * 0.25);
+        ctx.lineTo(apexX, vaultY);
+        ctx.stroke();
+
+        ctx.strokeStyle = rgba(tintBase, clamp(alpha * 0.46, 0.015, 0.08).toFixed(3));
+        ctx.lineWidth = Math.max(0.38 * dpr, (0.4 + densityScale * 0.38) * dpr);
+        ctx.beginPath();
+        ctx.moveTo(item.x, item.y + item.radius * 0.35);
+        ctx.lineTo(item.x, floorY);
+        ctx.stroke();
+
+        ctx.strokeStyle = rgba(tintAccent, clamp(alpha * 0.82, 0.02, 0.14).toFixed(3));
+        ctx.lineWidth = Math.max(0.5 * dpr, (0.45 + densityScale * 0.45) * dpr);
+        ctx.beginPath();
+        ctx.ellipse(
+          item.x,
+          item.y,
+          Math.max(4 * dpr, archLift * 0.22),
+          Math.max(7 * dpr, archLift * 0.54),
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < anchors.length - 1; i += 1) {
+        const left = anchors[i];
+        const right = anchors[i + 1];
+        const span = right.item.x - left.item.x;
+        if (span < 20 * dpr || span > state.width * 0.34) {
+          continue;
+        }
+
+        const midX = (left.item.x + right.item.x) * 0.5;
+        const baseY = Math.min(left.item.y, right.item.y);
+        const crestY = Math.min(vaultY + state.height * 0.12, baseY - clamp(span * 0.22, 18 * dpr, state.height * 0.16));
+        const archColor = mixColor(left.item.frame.color, right.item.frame.color, 0.5);
+        const alpha = clamp((0.034 + (left.focus + right.focus) * 0.1 + (left.densityScale + right.densityScale) * 0.032) * sceneBoost, 0.02, 0.14);
+
+        ctx.strokeStyle = rgba(archColor, alpha.toFixed(3));
+        ctx.lineWidth = Math.max(0.6 * dpr, (0.68 + (left.focus + right.focus) * 0.45) * dpr);
+        ctx.beginPath();
+        ctx.moveTo(left.item.x, left.item.y);
+        ctx.quadraticCurveTo(midX, crestY, right.item.x, right.item.y);
+        ctx.stroke();
+
+        ctx.strokeStyle = rgba(mixColor(archColor, goldAccent, 0.3), clamp(alpha * 0.56, 0.015, 0.08).toFixed(3));
+        ctx.lineWidth = Math.max(0.35 * dpr, 0.45 * dpr);
+        ctx.beginPath();
+        ctx.moveTo(left.item.x, left.item.y - 3 * dpr);
+        ctx.quadraticCurveTo(midX, crestY + 8 * dpr, right.item.x, right.item.y - 3 * dpr);
+        ctx.stroke();
+      }
+
+      const activeEntry = anchors.find((entry) => entry.item.index === activeIndex) || anchors[0] || null;
+      if (activeEntry) {
+        const roseRadius = clamp(
+          activeEntry.item.radius * (2.8 + activeEntry.focus * 1.6),
+          14 * dpr,
+          Math.min(state.width, state.height) * 0.075,
+        );
+        const roseColor = mixColor(activeEntry.item.frame.color, goldAccent, 0.48);
+        ctx.setLineDash([Math.max(5 * dpr, roseRadius * 0.18), Math.max(7 * dpr, roseRadius * 0.16)]);
+        ctx.strokeStyle = rgba(roseColor, 0.12);
+        ctx.lineWidth = Math.max(0.65 * dpr, 0.9 * dpr);
+        ctx.beginPath();
+        ctx.arc(activeEntry.item.x, activeEntry.item.y, roseRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      ctx.restore();
+    }
+
   function selectLensSource(projected, activeIndex) {
     if (!Array.isArray(projected) || projected.length === 0) {
       return null;
@@ -1508,6 +1765,8 @@ export function createRenderModule(runtime) {
   
     if (!nodesOnly.checked) {
         drawEdges(byIndex, visibleIndices, activeIndex, nowSec);
+        drawObservatoryOverlay(projected, activeIndex, nowSec);
+        drawCathedralOverlay(projected, activeIndex, nowSec);
     }
   
     for (const item of projected) {
@@ -1546,6 +1805,8 @@ export function createRenderModule(runtime) {
     drawFlowParticles,
     drawEdges,
     drawLabels,
+    drawObservatoryOverlay,
+    drawCathedralOverlay,
     drawPoints,
     drawMap,
   };

@@ -1,6 +1,6 @@
-librosa>=0.10.1
-numpy>=1.26.0
-pandas>=2.1.0
-scipy>=1.11.0
-pytest>=8.0.0
-demucs>=4.0.0
+librosa>=0.11.0
+numpy>=2.4.4
+pandas>=3.0.2
+scipy>=1.17.1
+pytest>=9.0.3
+demucs>=4.0.1

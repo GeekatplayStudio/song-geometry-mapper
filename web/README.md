@@ -46,6 +46,12 @@ It can analyze audio in-browser or load backend-generated features for playback-
   - `Straight`
   - `Ribbon` (fluid strip + traveling light wave)
 - reactive trails, glow, fog, pulse, and flow particles
+- `Observatory` preset for a more analytic stage language
+- optional `Observatory Overlay` with structural scan halos and orbit rings
+- `Cathedral` preset for a vaulted architectural stage language
+- optional `Cathedral Overlay` with beacon spires and vaulted arches
+- selecting `Observatory` or `Cathedral` also loads recommended camera/FX defaults and restores the previous non-scene control state when you switch back to a legacy preset
+- the built-in scene pair is intentionally balanced as a preset family: `Observatory` stays cleaner and more analytical, while `Cathedral` stays fuller and more theatrical
 - `Wave Amplification` control boosts wave-edge amplitude when motion is too subtle
 - `Point Solidness` control makes node spheres denser and less translucent
 - lower-right `H/S` focus toggle hides/restores all overlay windows for fullscreen display mode
@@ -132,6 +138,8 @@ node --test web/tests/*.test.js
 ## Related Docs
 
 - front page: `../README.md`
+- preservation baseline: `../docs/PRESERVATION.md`
+- regression checklist: `../docs/REGRESSION_CHECKLIST.md`
 - installation: `../docs/INSTALL.md`
 - algorithms: `../docs/ALGORITHMS.md`
 - license: `../LICENSE`

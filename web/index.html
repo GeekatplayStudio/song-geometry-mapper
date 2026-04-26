@@ -121,6 +121,14 @@
               <strong>Mapping:</strong> Choose <em>Manifold (PCA)</em> for structure clusters, <em>Time Spine</em> for chronology, <em>Hybrid Flow</em> for both, or <em>Helix Orbit</em> for spiral timeline motion.
               Similar sounding regions become spatially closer in manifold-style modes.
             </p>
+            <p>
+              <strong>Observatory Layer:</strong> The <em>Observatory</em> preset adds a more analytical presentation with structural scan halos and orbit rings, while keeping the original geometry modes intact.
+              It also loads a calmer camera and lower-noise FX profile when selected.
+            </p>
+            <p>
+              <strong>Cathedral Layer:</strong> The <em>Cathedral</em> preset adds vaulted arches, beacon spires, and a stronger stage silhouette without replacing the base graph.
+              It also loads a more theatrical camera and glow profile when selected.
+            </p>
             <h3>Analyzer Modes</h3>
             <p>
               <strong>Classic (Browser):</strong> drop audio and analyze locally in the browser.
@@ -131,6 +139,9 @@
             <ul>
               <li><strong>Mapping Mode:</strong> Switch among Manifold, Time Spine, Hybrid Flow, and Helix Orbit views.</li>
               <li><strong>Connections:</strong> Use temporal and similarity links, with straight or wave style.</li>
+              <li><strong>Observatory Overlay:</strong> Add structural scan rings on top of the current map without replacing legacy presets or controls.</li>
+              <li><strong>Cathedral Overlay:</strong> Add vaulted arches and beacon spires as another optional scene layer.</li>
+              <li><strong>Scene Defaults:</strong> Selecting Observatory or Cathedral also loads recommended camera and FX defaults, and switching back to a legacy preset restores your prior non-scene settings.</li>
               <li><strong>Refine Geometry:</strong> Use song-aware auto spread or manual spread plus X/Y/Z offsets.</li>
               <li><strong>Visibility:</strong> Use "Nodes Only" to hide edges and effects for a cleaner view.</li>
             </ul>
@@ -441,6 +452,8 @@
               <select id="visual-preset">
                 <option value="cinematic" selected>Cinematic</option>
                 <option value="cinematic-plus">Cinematic+</option>
+                <option value="observatory">Observatory</option>
+                <option value="cathedral">Cathedral</option>
                 <option value="scientific">Scientific</option>
                 <option value="neon">Neon</option>
                 <option value="aurora">Aurora</option>
@@ -448,6 +461,12 @@
                 <option value="arctic">Arctic</option>
                 <option value="infrared">Infrared</option>
               </select>
+            </label>
+            <label>
+              <input id="observatory-overlay" type="checkbox" /> Observatory Overlay <span class="info-icon" data-tooltip="Adds structural scan halos and orbit rings; enabled automatically by the Observatory preset and optionally usable with other presets."><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
+            </label>
+            <label>
+              <input id="cathedral-overlay" type="checkbox" /> Cathedral Overlay <span class="info-icon" data-tooltip="Adds vaulted arches and beacon spires; enabled automatically by the Cathedral preset and optionally usable with other presets."><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></span>
             </label>
             <label>
               Custom Presets

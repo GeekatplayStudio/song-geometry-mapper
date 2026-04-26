@@ -46,7 +46,7 @@ fi
 source .venv/bin/activate
 echo "[INFO] Installing dependencies..."
 python3 -m pip install --upgrade pip
-pip install -r requirements.txt
+python3 -m pip install -c constraints.txt -r requirements.txt
 
 # Check for Demucs availability
 if python3 -c "import demucs" >/dev/null 2>&1; then

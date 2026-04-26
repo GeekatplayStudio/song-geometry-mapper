@@ -43,6 +43,8 @@ Run in order:
 
 ### Docker path
 
+The analyzer image installs `python/requirements.txt` under `python/constraints-docker.txt` and uses the PyTorch CPU wheel index so Docker keeps `demucs` without pulling the Linux CUDA stack.
+
 From repo root:
 ```bash
 docker compose build analyzer
@@ -71,7 +73,7 @@ docker compose run --rm analyzer \
 cd python
 python3.11 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+python -m pip install -c constraints.txt -r requirements.txt
 python -m pytest -q
 ```
 
@@ -152,6 +154,8 @@ Stem outputs (when `--separate` used):
 ## Related Docs
 
 - `README.md`
+- `docs/PRESERVATION.md`
+- `docs/REGRESSION_CHECKLIST.md`
 - `docs/ALGORITHMS.md`
 - `python/README.md`
 - `web/README.md`

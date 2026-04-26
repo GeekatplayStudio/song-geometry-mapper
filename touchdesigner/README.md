@@ -4,6 +4,8 @@ This project is designed for local use on macOS and Windows with recent TouchDes
 
 `SongGeometryMapper.toe` in this repo is a placeholder file. Use this recipe to build the network exactly.
 
+The newer web-only `Observatory` and `Cathedral` scene families are additive presentation layers in the browser renderer. They do not change the analyzer CSV/JSON contract consumed by this TouchDesigner workflow.
+
 ## Inputs
 
 - Main data file: `../out/features.csv`
@@ -144,3 +146,10 @@ Use one of these two equivalent paths.
 - Z = `spectral_spread_hz`
 - Point size = `rms`
 - Point color = `spectral_spread_khz`
+
+## Related Docs
+
+- project front page: `../README.md`
+- preservation baseline: `../docs/PRESERVATION.md`
+- installation: `../docs/INSTALL.md`
+- analyzer details: `../python/README.md`

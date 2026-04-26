@@ -8,6 +8,21 @@ Primary local components:
 - Web viewer (`web/`) for interactive 3D rendering and export
 - TouchDesigner workflow (`touchdesigner/README.md`) for advanced scene construction
 
+### 1.1 Preservation and Extension Policy
+
+The current system is the technical baseline.
+
+Future work should extend it additively unless an explicit migration decision is made.
+
+Preserve these top-level pathways:
+- classic browser analysis path
+- backend analysis path through the local Python API
+- TouchDesigner ingest path
+- current script entrypoints and export formats
+
+Detailed baseline reference:
+- `docs/PRESERVATION.md`
+
 Data flow variants:
 
 1. Classic browser path:

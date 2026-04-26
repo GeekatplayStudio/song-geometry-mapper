@@ -11,8 +11,20 @@ It turns a song into a time-indexed geometric structure:
 The project includes:
 - Python analyzer pipeline (`python/bgm`) for reproducible offline extraction
 - Browser analyzer and cinematic renderer (`web/app.js` + `web/app/*`) for interactive exploration
+- additive `Observatory` and `Cathedral` scene families with optional overlays and recommended camera/FX defaults
 - optional stem separation (Demucs) for voice/instrument focused maps
 - JSON/PNG/WebM/OBJ exports
+
+## Preservation Rule
+
+Current project behavior is the baseline.
+
+New implementation should be additive by default:
+- add new modes, layouts, presets, overlays, and exports without removing existing ones
+- preserve current scripts, analyzer contracts, browser mode, backend mode, and export flows unless a removal is explicitly approved
+
+Reference:
+- `docs/PRESERVATION.md`
 
 ## What It Does
 
@@ -61,6 +73,11 @@ Primary outputs:
 - Analysis/mapping/presets: `web/app/analysis-module.js`
 - Rendering/camera/effects: `web/app/render-module.js`
 - Playback/import/export/recording workflows: `web/app/workflow-module.js`
+
+Additive scene families currently available in the web renderer:
+- `Observatory`: calmer analytical presentation with scan halos and orbit rings
+- `Cathedral`: denser theatrical presentation with vaulted arches and beacon spires
+- selecting either preset auto-loads recommended scene defaults and restores prior non-scene controls when switching back to a legacy preset
 
 ## How Node Placement Works
 
@@ -157,6 +174,10 @@ Time Spine equations used in renderer:
 See complete instructions:
 - `docs/INSTALL.md`
 
+Reproducible installs:
+- local Python setup uses `python/constraints.txt`
+- Docker analyzer builds use `python/constraints-docker.txt` with CPU-only PyTorch wheels
+
 Quick path (macOS/Linux):
 ```bash
 ./setup_mac.sh
@@ -238,6 +259,8 @@ Notes:
 
 - Installation: `docs/INSTALL.md`
 - Development workflow: `docs/DEVELOPMENT.md`
+- Preservation baseline and additive policy: `docs/PRESERVATION.md`
+- Manual regression checklist: `docs/REGRESSION_CHECKLIST.md`
 - Detailed algorithms and formulas: `docs/ALGORITHMS.md`
 - Research references: `docs/RESEARCH.md`
 - Python analyzer details: `python/README.md`
